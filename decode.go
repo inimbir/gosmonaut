@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"./OSMPBF"
 	"github.com/golang/protobuf/proto"
-	"github.com/qedus/osmpbf/OSMPBF"
 )
 
 const (
@@ -52,35 +52,23 @@ type Header struct {
 	OsmosisReplicationBaseUrl        string
 }
 
-type Info struct {
-	Version   int32
-	Uid       int32
-	Timestamp time.Time
-	Changeset int64
-	User      string
-	Visible   bool
-}
-
 type Node struct {
 	ID   int64
 	Lat  float64
 	Lon  float64
 	Tags map[string]string
-	Info Info
 }
 
 type Way struct {
 	ID      int64
 	Tags    map[string]string
 	NodeIDs []int64
-	Info    Info
 }
 
 type Relation struct {
 	ID      int64
 	Tags    map[string]string
 	Members []Member
-	Info    Info
 }
 
 type MemberType int
@@ -367,10 +355,10 @@ func (dec *Decoder) decodeOSMHeader(blob *OSMPBF.Blob) error {
 
 	// Read properties to header struct
 	header := &Header{
-		RequiredFeatures: headerBlock.GetRequiredFeatures(),
-		OptionalFeatures: headerBlock.GetOptionalFeatures(),
-		WritingProgram:   headerBlock.GetWritingprogram(),
-		Source:           headerBlock.GetSource(),
+		RequiredFeatures:                 headerBlock.GetRequiredFeatures(),
+		OptionalFeatures:                 headerBlock.GetOptionalFeatures(),
+		WritingProgram:                   headerBlock.GetWritingprogram(),
+		Source:                           headerBlock.GetSource(),
 		OsmosisReplicationBaseUrl:        headerBlock.GetOsmosisReplicationBaseUrl(),
 		OsmosisReplicationSequenceNumber: headerBlock.GetOsmosisReplicationSequenceNumber(),
 	}

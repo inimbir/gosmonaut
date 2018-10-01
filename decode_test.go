@@ -89,14 +89,6 @@ var (
 			"name":       "The Luminaire",
 			"note":       "Live music venue too",
 		},
-		Info: Info{
-			Version:   2,
-			Timestamp: parseTime("2009-05-20T10:28:54Z"),
-			Changeset: 1260468,
-			Uid:       508,
-			User:      "Welshie",
-			Visible:   true,
-		},
 	}
 
 	ew = &Way{
@@ -109,14 +101,6 @@ var (
 			"highway": "pedestrian",
 			"name":    "Fitzroy Square",
 		},
-		Info: Info{
-			Version:   7,
-			Timestamp: parseTime("2013-08-07T12:08:39Z"),
-			Changeset: 17253164,
-			Uid:       1016290,
-			User:      "Amaroussi",
-			Visible:   true,
-		},
 	}
 
 	er = &Relation{
@@ -128,14 +112,6 @@ var (
 		Tags: map[string]string{
 			"created_by": "Potlatch 0.9c",
 			"type":       "multipolygon",
-		},
-		Info: Info{
-			Version:   4,
-			Timestamp: parseTime("2008-07-19T15:04:03Z"),
-			Changeset: 540201,
-			Uid:       3876,
-			User:      "Edgemaster",
-			Visible:   true,
 		},
 	}
 )

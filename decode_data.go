@@ -1,10 +1,8 @@
 package osmpbf
 
 import (
-	"time"
-
+	"./OSMPBF"
 	"github.com/golang/protobuf/proto"
-	"github.com/qedus/osmpbf/OSMPBF"
 )
 
 // Decoder for Blob with OSMData (PrimitiveBlock)
@@ -45,7 +43,6 @@ func (dec *dataDecoder) parsePrimitiveGroup(pb *OSMPBF.PrimitiveBlock, pg *OSMPB
 func (dec *dataDecoder) parseNodes(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.Node) {
 	st := pb.GetStringtable().GetS()
 	granularity := int64(pb.GetGranularity())
-	dateGranularity := int64(pb.GetDateGranularity())
 
 	latOffset := pb.GetLatOffset()
 	lonOffset := pb.GetLonOffset()
@@ -59,9 +56,8 @@ func (dec *dataDecoder) parseNodes(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.No
 		longitude := 1e-9 * float64((lonOffset + (granularity * lon)))
 
 		tags := extractTags(st, node.GetKeys(), node.GetVals())
-		info := extractInfo(st, node.GetInfo(), dateGranularity)
 
-		dec.q = append(dec.q, &Node{id, latitude, longitude, tags, info})
+		dec.q = append(dec.q, &Node{id, latitude, longitude, tags})
 	}
 
 }
@@ -71,15 +67,12 @@ func (dec *dataDecoder) parseDenseNodes(pb *OSMPBF.PrimitiveBlock, dn *OSMPBF.De
 	granularity := int64(pb.GetGranularity())
 	latOffset := pb.GetLatOffset()
 	lonOffset := pb.GetLonOffset()
-	dateGranularity := int64(pb.GetDateGranularity())
 	ids := dn.GetId()
 	lats := dn.GetLat()
 	lons := dn.GetLon()
-	di := dn.GetDenseinfo()
 
 	tu := tagUnpacker{st, dn.GetKeysVals(), 0}
 	var id, lat, lon int64
-	var state denseInfoState
 	for index := range ids {
 		id = ids[index] + id
 		lat = lats[index] + lat
@@ -87,15 +80,13 @@ func (dec *dataDecoder) parseDenseNodes(pb *OSMPBF.PrimitiveBlock, dn *OSMPBF.De
 		latitude := 1e-9 * float64((latOffset + (granularity * lat)))
 		longitude := 1e-9 * float64((lonOffset + (granularity * lon)))
 		tags := tu.next()
-		info := extractDenseInfo(st, &state, di, index, dateGranularity)
 
-		dec.q = append(dec.q, &Node{id, latitude, longitude, tags, info})
+		dec.q = append(dec.q, &Node{id, latitude, longitude, tags})
 	}
 }
 
 func (dec *dataDecoder) parseWays(pb *OSMPBF.PrimitiveBlock, ways []*OSMPBF.Way) {
 	st := pb.GetStringtable().GetS()
-	dateGranularity := int64(pb.GetDateGranularity())
 
 	for _, way := range ways {
 		id := way.GetId()
@@ -110,9 +101,7 @@ func (dec *dataDecoder) parseWays(pb *OSMPBF.PrimitiveBlock, ways []*OSMPBF.Way)
 			nodeIDs[index] = nodeID
 		}
 
-		info := extractInfo(st, way.GetInfo(), dateGranularity)
-
-		dec.q = append(dec.q, &Way{id, tags, nodeIDs, info})
+		dec.q = append(dec.q, &Way{id, tags, nodeIDs})
 	}
 }
 
@@ -147,85 +136,12 @@ func extractMembers(stringTable []string, rel *OSMPBF.Relation) []Member {
 
 func (dec *dataDecoder) parseRelations(pb *OSMPBF.PrimitiveBlock, relations []*OSMPBF.Relation) {
 	st := pb.GetStringtable().GetS()
-	dateGranularity := int64(pb.GetDateGranularity())
 
 	for _, rel := range relations {
 		id := rel.GetId()
 		tags := extractTags(st, rel.GetKeys(), rel.GetVals())
 		members := extractMembers(st, rel)
-		info := extractInfo(st, rel.GetInfo(), dateGranularity)
 
-		dec.q = append(dec.q, &Relation{id, tags, members, info})
+		dec.q = append(dec.q, &Relation{id, tags, members})
 	}
-}
-
-func extractInfo(stringTable []string, i *OSMPBF.Info, dateGranularity int64) Info {
-	info := Info{Visible: true}
-
-	if i != nil {
-		info.Version = i.GetVersion()
-
-		millisec := time.Duration(i.GetTimestamp()*dateGranularity) * time.Millisecond
-		info.Timestamp = time.Unix(0, millisec.Nanoseconds()).UTC()
-
-		info.Changeset = i.GetChangeset()
-
-		info.Uid = i.GetUid()
-
-		info.User = stringTable[i.GetUserSid()]
-
-		if i.Visible != nil {
-			info.Visible = i.GetVisible()
-		}
-	}
-
-	return info
-}
-
-type denseInfoState struct {
-	timestamp int64
-	changeset int64
-	uid       int32
-	userSid   int32
-}
-
-func extractDenseInfo(stringTable []string, state *denseInfoState, di *OSMPBF.DenseInfo, index int, dateGranularity int64) Info {
-	info := Info{Visible: true}
-
-	versions := di.GetVersion()
-	if len(versions) > 0 {
-		info.Version = versions[index]
-	}
-
-	timestamps := di.GetTimestamp()
-	if len(timestamps) > 0 {
-		state.timestamp = timestamps[index] + state.timestamp
-		millisec := time.Duration(state.timestamp*dateGranularity) * time.Millisecond
-		info.Timestamp = time.Unix(0, millisec.Nanoseconds()).UTC()
-	}
-
-	changesets := di.GetChangeset()
-	if len(changesets) > 0 {
-		state.changeset = changesets[index] + state.changeset
-		info.Changeset = state.changeset
-	}
-
-	uids := di.GetUid()
-	if len(uids) > 0 {
-		state.uid = uids[index] + state.uid
-		info.Uid = state.uid
-	}
-
-	usersids := di.GetUserSid()
-	if len(usersids) > 0 {
-		state.userSid = usersids[index] + state.userSid
-		info.User = stringTable[state.userSid]
-	}
-
-	visibleArray := di.GetVisible()
-	if len(visibleArray) > 0 {
-		info.Visible = visibleArray[index]
-	}
-
-	return info
 }
