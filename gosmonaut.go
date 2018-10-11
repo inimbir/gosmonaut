@@ -182,7 +182,7 @@ func (g *Gosmonaut) entityNeeded(t OSMType, tags map[string]string) bool {
 
 func (g *Gosmonaut) scanRelationDependencies() error {
 	return g.scan(RelationType, func(v interface{}) error {
-		r, ok := v.(*rawRelation)
+		r, ok := v.(rawRelation)
 		if !ok {
 			return fmt.Errorf("Got invalid relation from decoder (%T)", v)
 		}
@@ -206,7 +206,7 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 
 func (g *Gosmonaut) scanWayDependencies() error {
 	return g.scan(WayType, func(v interface{}) error {
-		w, ok := v.(*rawWay)
+		w, ok := v.(rawWay)
 		if !ok {
 			return fmt.Errorf("Got invalid way from decoder (%T)", v)
 		}
@@ -223,19 +223,19 @@ func (g *Gosmonaut) scanWayDependencies() error {
 
 func (g *Gosmonaut) scanNodes() error {
 	return g.scan(NodeType, func(v interface{}) error {
-		n, ok := v.(*Node)
+		n, ok := v.(Node)
 		if !ok {
 			return fmt.Errorf("Got invalid node from decoder (%T)", v)
 		}
 
 		// Add to node cache
 		if g.nodeIDCache.contains(n.ID) {
-			g.nodeCache[n.ID] = *n
+			g.nodeCache[n.ID] = n
 		}
 
 		// Send to output stream
 		if g.entityNeeded(NodeType, n.Tags) {
-			g.streamEntity(*n)
+			g.streamEntity(n)
 		}
 		return nil
 	})
@@ -243,7 +243,7 @@ func (g *Gosmonaut) scanNodes() error {
 
 func (g *Gosmonaut) scanWays() error {
 	return g.scan(WayType, func(v interface{}) error {
-		raw, ok := v.(*rawWay)
+		raw, ok := v.(rawWay)
 		if !ok {
 			return fmt.Errorf("Got invalid way from decoder (%T)", v)
 		}
@@ -281,7 +281,7 @@ func (g *Gosmonaut) scanWays() error {
 
 func (g *Gosmonaut) scanRelations() error {
 	return g.scan(RelationType, func(v interface{}) error {
-		raw, ok := v.(*rawRelation)
+		raw, ok := v.(rawRelation)
 		if !ok {
 			return fmt.Errorf("Got invalid relation from decoder (%T)", v)
 		}
@@ -359,15 +359,15 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 			return err
 		} else {
 			switch v := v.(type) {
-			case *Node:
+			case Node:
 				if t != NodeType {
 					continue
 				}
-			case *rawWay:
+			case rawWay:
 				if t != WayType {
 					continue
 				}
-			case *rawRelation:
+			case rawRelation:
 				if t != RelationType {
 					continue
 				}
