@@ -1,0 +1,19 @@
+{
+  "type": "node",
+  "id": 108042,
+  "lat": 51.5235442,
+  "lon": -0.1355991,
+  "tags": {
+    "addr:housenumber": "31",
+    "addr:street": "University Street",
+    "amenity": "pub",
+    "name": "The Jeremy Bentham",
+    "phone": "020 7387 3033",
+    "postal_code": "WC1E 6JL",
+    "randomjunk_bot": "reverted edit by FilipeOliveira on 2008-11-24T15:02:32+00:00",
+    "toilets": "yes",
+    "toilets:access": "customers",
+    "toilets:wheelchair": "no",
+    "wheelchair": "limited"
+  }
+}

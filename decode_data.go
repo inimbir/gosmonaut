@@ -101,22 +101,22 @@ func (dec *dataDecoder) parseWays(pb *OSMPBF.PrimitiveBlock, ways []*OSMPBF.Way)
 			nodeIDs[index] = nodeID
 		}
 
-		dec.q = append(dec.q, &Way{id, tags, nodeIDs})
+		dec.q = append(dec.q, &rawWay{id, tags, nodeIDs})
 	}
 }
 
 // Make relation members from stringtable and three parallel arrays of IDs.
-func extractMembers(stringTable []string, rel *OSMPBF.Relation) []Member {
+func extractMembers(stringTable []string, rel *OSMPBF.Relation) []rawMember {
 	memIDs := rel.GetMemids()
 	types := rel.GetTypes()
 	roleIDs := rel.GetRolesSid()
 
 	var memID int64
-	members := make([]Member, len(memIDs))
+	members := make([]rawMember, len(memIDs))
 	for index := range memIDs {
 		memID = memIDs[index] + memID // delta encoding
 
-		var memType MemberType
+		var memType OSMType
 		switch types[index] {
 		case OSMPBF.Relation_NODE:
 			memType = NodeType
@@ -128,7 +128,7 @@ func extractMembers(stringTable []string, rel *OSMPBF.Relation) []Member {
 
 		role := stringTable[roleIDs[index]]
 
-		members[index] = Member{memID, memType, role}
+		members[index] = rawMember{memID, memType, role}
 	}
 
 	return members
@@ -142,6 +142,6 @@ func (dec *dataDecoder) parseRelations(pb *OSMPBF.PrimitiveBlock, relations []*O
 		tags := extractTags(st, rel.GetKeys(), rel.GetVals())
 		members := extractMembers(st, rel)
 
-		dec.q = append(dec.q, &Relation{id, tags, members})
+		dec.q = append(dec.q, &rawRelation{id, tags, members})
 	}
 }

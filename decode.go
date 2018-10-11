@@ -25,6 +25,9 @@ const (
 
 	// MaxBlobSize is maximum supported blob size.
 	MaxBlobSize = 32 * 1024 * 1024
+
+	// Typical PrimitiveBlock contains 8k OSM entities
+	entitiesPerPrimitiveBlock = 8000
 )
 
 var (
@@ -52,36 +55,21 @@ type Header struct {
 	OsmosisReplicationBaseUrl        string
 }
 
-type Node struct {
-	ID   int64
-	Lat  float64
-	Lon  float64
-	Tags map[string]string
-}
-
-type Way struct {
+type rawWay struct {
 	ID      int64
 	Tags    map[string]string
 	NodeIDs []int64
 }
 
-type Relation struct {
+type rawRelation struct {
 	ID      int64
 	Tags    map[string]string
-	Members []Member
+	Members []rawMember
 }
 
-type MemberType int
-
-const (
-	NodeType MemberType = iota
-	WayType
-	RelationType
-)
-
-type Member struct {
+type rawMember struct {
 	ID   int64
-	Type MemberType
+	Type OSMType
 	Role string
 }
 
@@ -111,7 +99,7 @@ type Decoder struct {
 func NewDecoder(r io.Reader) *Decoder {
 	d := &Decoder{
 		r:          r,
-		serializer: make(chan pair, 8000), // typical PrimitiveBlock contains 8k OSM entities
+		serializer: make(chan pair, entitiesPerPrimitiveBlock),
 	}
 	d.SetBufferSize(initialBlobBufSize)
 	return d

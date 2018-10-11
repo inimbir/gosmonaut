@@ -1,0 +1,94 @@
+{
+  "type": "way",
+  "id": 2956916,
+  "tags": {
+    "addr:housenumber": "170-232",
+    "addr:interpolation": "all",
+    "created_by": "Potlatch 0.5d",
+    "highway": "residential",
+    "name": "Bell Green Lane"
+  },
+  "nodes": [
+    {
+      "type": "node",
+      "id": 13820222,
+      "lat": 51.4241003,
+      "lon": -0.0382913,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893281,
+      "lat": 51.4241313,
+      "lon": -0.0385193,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893274,
+      "lat": 51.4243465,
+      "lon": -0.0387084,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893275,
+      "lat": 51.4244111,
+      "lon": -0.0386615,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893276,
+      "lat": 51.4245929,
+      "lon": -0.0388023,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893277,
+      "lat": 51.4246478,
+      "lon": -0.0385734,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893278,
+      "lat": 51.4247529,
+      "lon": -0.0385524,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893279,
+      "lat": 51.4248249,
+      "lon": -0.0386455,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13893280,
+      "lat": 51.4247529,
+      "lon": -0.0386725,
+      "tags": {
+        "created_by": "JOSM"
+      }
+    }
+  ]
+}

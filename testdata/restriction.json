@@ -1,0 +1,260 @@
+{
+  "type": "relation",
+  "id": 4732,
+  "tags": {
+    "restriction": "no_right_turn",
+    "type": "restriction"
+  },
+  "members": [
+    {
+      "role": "from",
+      "entity": {
+        "type": "way",
+        "id": 22721935,
+        "tags": {
+          "highway": "secondary",
+          "lcn": "yes",
+          "lit": "yes",
+          "name": "Traps Lane",
+          "ref": "B283",
+          "source": "Bing",
+          "source:ref": "OS OpenData StreetView"
+        },
+        "nodes": [
+          {
+            "type": "node",
+            "id": 26403822,
+            "lat": 51.4168254,
+            "lon": -0.2615366,
+            "tags": {
+              "created_by": "JOSM"
+            }
+          },
+          {
+            "type": "node",
+            "id": 1692226437,
+            "lat": 51.4167502,
+            "lon": -0.2614693
+          },
+          {
+            "type": "node",
+            "id": 240012470,
+            "lat": 51.4162308,
+            "lon": -0.2611575
+          },
+          {
+            "type": "node",
+            "id": 243715088,
+            "lat": 51.4154431,
+            "lon": -0.2607026
+          },
+          {
+            "type": "node",
+            "id": 240012471,
+            "lat": 51.4149378,
+            "lon": -0.2604266
+          },
+          {
+            "type": "node",
+            "id": 240012472,
+            "lat": 51.4144608,
+            "lon": -0.2601724
+          },
+          {
+            "type": "node",
+            "id": 243715089,
+            "lat": 51.4140266,
+            "lon": -0.2599476,
+            "tags": {
+              "created_by": "JOSM"
+            }
+          },
+          {
+            "type": "node",
+            "id": 240012473,
+            "lat": 51.4136240,
+            "lon": -0.2598711
+          },
+          {
+            "type": "node",
+            "id": 243715100,
+            "lat": 51.4132939,
+            "lon": -0.2598734,
+            "tags": {
+              "created_by": "JOSM"
+            }
+          },
+          {
+            "type": "node",
+            "id": 240012475,
+            "lat": 51.4131425,
+            "lon": -0.2598626
+          },
+          {
+            "type": "node",
+            "id": 240012476,
+            "lat": 51.4122159,
+            "lon": -0.2596909
+          },
+          {
+            "type": "node",
+            "id": 235490185,
+            "lat": 51.4116771,
+            "lon": -0.2595308
+          },
+          {
+            "type": "node",
+            "id": 243715116,
+            "lat": 51.4111169,
+            "lon": -0.2592978,
+            "tags": {
+              "created_by": "JOSM"
+            }
+          },
+          {
+            "type": "node",
+            "id": 26403834,
+            "lat": 51.4101360,
+            "lon": -0.2589525
+          },
+          {
+            "type": "node",
+            "id": 1814260764,
+            "lat": 51.4095384,
+            "lon": -0.2587546
+          }
+        ]
+      }
+    },
+    {
+      "role": "via",
+      "entity": {
+        "type": "node",
+        "id": 26403822,
+        "lat": 51.4168254,
+        "lon": -0.2615366,
+        "tags": {
+          "created_by": "JOSM"
+        }
+      }
+    },
+    {
+      "role": "to",
+      "entity": {
+        "type": "way",
+        "id": 22721937,
+        "tags": {
+          "highway": "primary",
+          "lit": "yes",
+          "name": "Coombe Lane West",
+          "ref": "A238",
+          "source:name": "OS_OpenData_Locator"
+        },
+        "nodes": [
+          {
+            "type": "node",
+            "id": 26403822,
+            "lat": 51.4168254,
+            "lon": -0.2615366,
+            "tags": {
+              "created_by": "JOSM"
+            }
+          },
+          {
+            "type": "node",
+            "id": 240010460,
+            "lat": 51.4166594,
+            "lon": -0.2607039
+          },
+          {
+            "type": "node",
+            "id": 240010463,
+            "lat": 51.4163596,
+            "lon": -0.2596739
+          },
+          {
+            "type": "node",
+            "id": 26403824,
+            "lat": 51.4162740,
+            "lon": -0.2591847,
+            "tags": {
+              "created_by": "JOSM"
+            }
+          },
+          {
+            "type": "node",
+            "id": 240766463,
+            "lat": 51.4162717,
+            "lon": -0.2580907
+          },
+          {
+            "type": "node",
+            "id": 240766303,
+            "lat": 51.4162313,
+            "lon": -0.2574470
+          },
+          {
+            "type": "node",
+            "id": 246154102,
+            "lat": 51.4162443,
+            "lon": -0.2571608
+          },
+          {
+            "type": "node",
+            "id": 26403823,
+            "lat": 51.4163407,
+            "lon": -0.2555260
+          },
+          {
+            "type": "node",
+            "id": 240009868,
+            "lat": 51.4163466,
+            "lon": -0.2551399
+          },
+          {
+            "type": "node",
+            "id": 243715258,
+            "lat": 51.4163387,
+            "lon": -0.2549489
+          },
+          {
+            "type": "node",
+            "id": 240009454,
+            "lat": 51.4163004,
+            "lon": -0.2546129
+          },
+          {
+            "type": "node",
+            "id": 19091828,
+            "lat": 51.4161193,
+            "lon": -0.2536732
+          },
+          {
+            "type": "node",
+            "id": 240767642,
+            "lat": 51.4159191,
+            "lon": -0.2526471
+          },
+          {
+            "type": "node",
+            "id": 1142071214,
+            "lat": 51.4158895,
+            "lon": -0.2524731
+          },
+          {
+            "type": "node",
+            "id": 240003816,
+            "lat": 51.4158685,
+            "lon": -0.2523716
+          },
+          {
+            "type": "node",
+            "id": 19091827,
+            "lat": 51.4157991,
+            "lon": -0.2520775
+          }
+        ]
+      }
+    }
+  ]
+}

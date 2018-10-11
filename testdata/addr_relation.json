@@ -1,0 +1,113 @@
+{
+  "type": "relation",
+  "id": 37787,
+  "tags": {
+    "addr:city": "London",
+    "addr:housename": "Huxley Building",
+    "addr:housenumber": "180",
+    "addr:postcode": "SW7 5QL",
+    "addr:street": "Queen's Gate",
+    "building": "yes",
+    "name_1": "Department of Computing, Imperial College London",
+    "type": "multipolygon"
+  },
+  "members": [
+    {
+      "role": "outer",
+      "entity": {
+        "type": "way",
+        "id": 27765403,
+        "tags": {
+          "addr:housename": "Huxley Building",
+          "building": "yes"
+        },
+        "nodes": [
+          {
+            "type": "node",
+            "id": 304884743,
+            "lat": 51.4990743,
+            "lon": -0.1795050
+          },
+          {
+            "type": "node",
+            "id": 304884748,
+            "lat": 51.4986469,
+            "lon": -0.1794292
+          },
+          {
+            "type": "node",
+            "id": 304884753,
+            "lat": 51.4984319,
+            "lon": -0.1793934
+          },
+          {
+            "type": "node",
+            "id": 1270123320,
+            "lat": 51.4984405,
+            "lon": -0.1792677
+          },
+          {
+            "type": "node",
+            "id": 1270123324,
+            "lat": 51.4984464,
+            "lon": -0.1791788
+          },
+          {
+            "type": "node",
+            "id": 1270123325,
+            "lat": 51.4984542,
+            "lon": -0.1790669
+          },
+          {
+            "type": "node",
+            "id": 1270123328,
+            "lat": 51.4984559,
+            "lon": -0.1790367
+          },
+          {
+            "type": "node",
+            "id": 304884755,
+            "lat": 51.4984576,
+            "lon": -0.1790096
+          },
+          {
+            "type": "node",
+            "id": 304884751,
+            "lat": 51.4986635,
+            "lon": -0.1790438
+          },
+          {
+            "type": "node",
+            "id": 304884750,
+            "lat": 51.4986913,
+            "lon": -0.1786110
+          },
+          {
+            "type": "node",
+            "id": 304884746,
+            "lat": 51.4991293,
+            "lon": -0.1786837
+          },
+          {
+            "type": "node",
+            "id": 304884740,
+            "lat": 51.4990933,
+            "lon": -0.1789295
+          },
+          {
+            "type": "node",
+            "id": 304884742,
+            "lat": 51.4990759,
+            "lon": -0.1791884
+          },
+          {
+            "type": "node",
+            "id": 304884743,
+            "lat": 51.4990743,
+            "lon": -0.1795050
+          }
+        ]
+      }
+    }
+  ]
+}
