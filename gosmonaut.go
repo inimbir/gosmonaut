@@ -345,8 +345,8 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 	}
 
 	// Create decoder
-	d := NewDecoder(f)
-	d.SetBufferSize(MaxBlobSize)
+	d := newDecoder(f)
+	d.SetBufferSize(maxBlobSize)
 	if err := d.Start(nProcs); err != nil {
 		return err
 	}
