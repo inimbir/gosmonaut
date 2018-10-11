@@ -1,4 +1,4 @@
-package osmpbf
+package gosmonaut
 
 // Make tags map from stringtable and two parallel arrays of IDs.
 func extractTags(stringTable []string, keyIDs, valueIDs []uint32) map[string]string {

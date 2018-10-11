@@ -1,4 +1,4 @@
-package osmpbf
+package gosmonaut
 
 import (
 	"./OSMPBF"
