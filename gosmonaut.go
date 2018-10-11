@@ -50,8 +50,13 @@ type Gosmonaut struct {
 
 	// DebugMode prints warnings during decoding.
 	// Also duration and memory info will be printed after every processing step
-	// and the garbage collector is run.
+	// and the garbage collector is run. This variable should not be changed
+	// after running Start().
 	DebugMode bool
+
+	// Set the number of processes that are used for decoding.
+	// If not set the amount of available logical CPUs will be used.
+	NumProcessors int
 }
 
 // NewGosmonaut creates a new Gosmonaut instance.
@@ -97,7 +102,7 @@ func (g *Gosmonaut) Start() {
 		// Create way cache
 		if g.wayIDCache.len() != 0 {
 			g.wayCache = make(map[int64]Way, g.wayIDCache.len())
-			g.printDebugInfo("Created way cache")
+			g.printDebugInfo(fmt.Sprintf("Created way cache [length: %d]", g.wayIDCache.len()))
 		}
 
 		// Scan way dependencies
@@ -112,7 +117,7 @@ func (g *Gosmonaut) Start() {
 		// Create node cache
 		if g.nodeIDCache.len() != 0 {
 			g.nodeCache = make(map[int64]Node, g.nodeIDCache.len())
-			g.printDebugInfo("Created node cache")
+			g.printDebugInfo(fmt.Sprintf("Created node cache [length: %d]", g.nodeIDCache.len()))
 		}
 
 		// Scan nodes
@@ -331,10 +336,18 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 	}
 	defer f.Close()
 
+	// Determine number of processes
+	var nProcs int
+	if g.NumProcessors != 0 {
+		nProcs = g.NumProcessors
+	} else {
+		nProcs = runtime.NumCPU()
+	}
+
 	// Create decoder
 	d := NewDecoder(f)
 	d.SetBufferSize(MaxBlobSize)
-	if err := d.Start(runtime.GOMAXPROCS(-1)); err != nil {
+	if err := d.Start(nProcs); err != nil {
 		return err
 	}
 
