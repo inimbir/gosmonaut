@@ -93,9 +93,13 @@ type decoder struct {
 }
 
 // newDecoder returns a new decoder that reads from r.
-func newDecoder(r io.Reader) *decoder {
+func newDecoder(r io.Reader, n int) *decoder {
+	if n < 1 {
+		n = 1
+	}
 	d := &decoder{
-		r: r,
+		r:      r,
+		nProcs: n,
 	}
 	d.SetBufferSize(maxBlobSize)
 	return d
@@ -115,18 +119,13 @@ func (dec *decoder) Header() (*Header, error) {
 }
 
 // Start decoding process using n goroutines.
-func (dec *decoder) Start(n int) error {
-	if n < 1 {
-		n = 1
-	}
-	dec.nProcs = n
-
+func (dec *decoder) Start(t OSMType) error {
 	if err := dec.readOSMHeader(); err != nil {
 		return err
 	}
 
 	// start data decoders
-	for i := 0; i < n; i++ {
+	for i := 0; i < dec.nProcs; i++ {
 		input := make(chan pair)
 		output := make(chan pair)
 		go func() {
@@ -134,7 +133,7 @@ func (dec *decoder) Start(n int) error {
 			for p := range input {
 				if p.e == nil {
 					// send decoded objects or decoding error
-					objects, err := dd.Decode(p.i.(*OSMPBF.Blob))
+					objects, err := dd.Decode(p.i.(*OSMPBF.Blob), t)
 					output <- pair{objects, err}
 				} else {
 					// send input error as is
@@ -153,7 +152,7 @@ func (dec *decoder) Start(n int) error {
 		var inputIndex int
 		for {
 			input := dec.inputs[inputIndex]
-			inputIndex = (inputIndex + 1) % n
+			inputIndex = (inputIndex + 1) % dec.nProcs
 
 			blobHeader, blob, err := dec.readFileBlock()
 			if err == nil && blobHeader.GetType() != "OSMData" {

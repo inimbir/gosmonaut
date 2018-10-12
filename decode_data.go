@@ -10,7 +10,7 @@ type dataDecoder struct {
 	q []interface{}
 }
 
-func (dec *dataDecoder) Decode(blob *OSMPBF.Blob) ([]interface{}, error) {
+func (dec *dataDecoder) Decode(blob *OSMPBF.Blob, t OSMType) ([]interface{}, error) {
 	dec.q = make([]interface{}, 0, 8000) // typical PrimitiveBlock contains 8k OSM entities
 
 	data, err := getData(blob)
@@ -23,21 +23,26 @@ func (dec *dataDecoder) Decode(blob *OSMPBF.Blob) ([]interface{}, error) {
 		return nil, err
 	}
 
-	dec.parsePrimitiveBlock(primitiveBlock)
+	dec.parsePrimitiveBlock(primitiveBlock, t)
 	return dec.q, nil
 }
 
-func (dec *dataDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock) {
+func (dec *dataDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock, t OSMType) {
 	for _, pg := range pb.GetPrimitivegroup() {
-		dec.parsePrimitiveGroup(pb, pg)
+		dec.parsePrimitiveGroup(pb, pg, t)
 	}
 }
 
-func (dec *dataDecoder) parsePrimitiveGroup(pb *OSMPBF.PrimitiveBlock, pg *OSMPBF.PrimitiveGroup) {
-	dec.parseNodes(pb, pg.GetNodes())
-	dec.parseDenseNodes(pb, pg.GetDense())
-	dec.parseWays(pb, pg.GetWays())
-	dec.parseRelations(pb, pg.GetRelations())
+func (dec *dataDecoder) parsePrimitiveGroup(pb *OSMPBF.PrimitiveBlock, pg *OSMPBF.PrimitiveGroup, t OSMType) {
+	switch t {
+	case NodeType:
+		dec.parseNodes(pb, pg.GetNodes())
+		dec.parseDenseNodes(pb, pg.GetDense())
+	case WayType:
+		dec.parseWays(pb, pg.GetWays())
+	case RelationType:
+		dec.parseRelations(pb, pg.GetRelations())
+	}
 }
 
 func (dec *dataDecoder) parseNodes(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.Node) {

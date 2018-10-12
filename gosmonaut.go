@@ -347,8 +347,8 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 	}
 
 	// Create decoder
-	d := newDecoder(f)
-	if err := d.Start(nProcs); err != nil {
+	d := newDecoder(f, nProcs)
+	if err := d.Start(t); err != nil {
 		return err
 	}
 
@@ -364,25 +364,8 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 				return errors.New("Decoder did not return a slice")
 			}
 
+			// Send to receiver
 			for _, v := range i {
-				switch v := v.(type) {
-				case Node:
-					if t != NodeType {
-						continue
-					}
-				case rawWay:
-					if t != WayType {
-						continue
-					}
-				case rawRelation:
-					if t != RelationType {
-						continue
-					}
-				default:
-					return fmt.Errorf("Unknown type %T", v)
-				}
-
-				// Send to receiver
 				if err := receiver(v); err != nil {
 					return err
 				}
