@@ -1,6 +1,7 @@
 package gosmonaut
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -90,6 +91,8 @@ func (g *Gosmonaut) Start() {
 		}
 		g.printDebugInfo("Decoding started")
 
+		defer close(g.stream)
+
 		// Scan relation dependencies
 		if g.types.Get(RelationType) {
 			if err := g.scanRelationDependencies(); err != nil {
@@ -150,7 +153,6 @@ func (g *Gosmonaut) Start() {
 		if g.DebugMode {
 			fmt.Println("Elapsed time:", time.Since(g.timeStarted))
 		}
-		close(g.stream)
 	}()
 }
 
@@ -346,38 +348,44 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 
 	// Create decoder
 	d := newDecoder(f)
-	d.SetBufferSize(maxBlobSize)
 	if err := d.Start(nProcs); err != nil {
 		return err
 	}
 
 	// Decode file
 	for {
-		if v, err := d.Decode(); err == io.EOF {
+		if pair := d.nextPair(); pair.e == io.EOF {
 			break
-		} else if err != nil {
-			return err
+		} else if pair.e != nil {
+			return pair.e
 		} else {
-			switch v := v.(type) {
-			case Node:
-				if t != NodeType {
-					continue
-				}
-			case rawWay:
-				if t != WayType {
-					continue
-				}
-			case rawRelation:
-				if t != RelationType {
-					continue
-				}
-			default:
-				return fmt.Errorf("Unknown type %T", v)
+			i, ok := pair.i.([]interface{})
+			if !ok {
+				return errors.New("Decoder did not return a slice")
 			}
 
-			// Send to receiver
-			if err := receiver(v); err != nil {
-				return err
+			for _, v := range i {
+				switch v := v.(type) {
+				case Node:
+					if t != NodeType {
+						continue
+					}
+				case rawWay:
+					if t != WayType {
+						continue
+					}
+				case rawRelation:
+					if t != RelationType {
+						continue
+					}
+				default:
+					return fmt.Errorf("Unknown type %T", v)
+				}
+
+				// Send to receiver
+				if err := receiver(v); err != nil {
+					return err
+				}
 			}
 		}
 	}

@@ -76,8 +76,7 @@ type pair struct {
 
 // A Decoder reads and decodes OpenStreetMap PBF data from an input stream.
 type decoder struct {
-	r          io.Reader
-	serializer chan pair
+	r io.Reader
 
 	buf *bytes.Buffer
 
@@ -87,17 +86,18 @@ type decoder struct {
 	headerOnce sync.Once
 
 	// for data decoders
-	inputs  []chan<- pair
-	outputs []<-chan pair
+	inputs      []chan<- pair
+	outputs     []<-chan pair
+	nProcs      int
+	outputIndex int
 }
 
 // newDecoder returns a new decoder that reads from r.
 func newDecoder(r io.Reader) *decoder {
 	d := &decoder{
-		r:          r,
-		serializer: make(chan pair, entitiesPerPrimitiveBlock),
+		r: r,
 	}
-	d.SetBufferSize(initialBlobBufSize)
+	d.SetBufferSize(maxBlobSize)
 	return d
 }
 
@@ -119,6 +119,7 @@ func (dec *decoder) Start(n int) error {
 	if n < 1 {
 		n = 1
 	}
+	dec.nProcs = n
 
 	if err := dec.readOSMHeader(); err != nil {
 		return err
@@ -172,43 +173,18 @@ func (dec *decoder) Start(n int) error {
 		}
 	}()
 
-	go func() {
-		var outputIndex int
-		for {
-			output := dec.outputs[outputIndex]
-			outputIndex = (outputIndex + 1) % n
-
-			p := <-output
-			if p.i != nil {
-				// send decoded objects one by one
-				for _, o := range p.i.([]interface{}) {
-					dec.serializer <- pair{o, nil}
-				}
-			}
-			if p.e != nil {
-				// send input or decoding error
-				dec.serializer <- pair{nil, p.e}
-				close(dec.serializer)
-				return
-			}
-		}
-	}()
-
 	return nil
 }
 
-// Decode reads the next object from the input stream and returns either a
-// pointer to Node, Way or Relation struct representing the underlying OpenStreetMap PBF
-// data, or error encountered. The end of the input stream is reported by an io.EOF error.
-//
-// Decode is safe for parallel execution. Only first error encountered will be returned,
-// subsequent invocations will return io.EOF.
-func (dec *decoder) Decode() (interface{}, error) {
-	p, ok := <-dec.serializer
+func (dec *decoder) nextPair() pair {
+	output := dec.outputs[dec.outputIndex]
+	dec.outputIndex = (dec.outputIndex + 1) % dec.nProcs
+
+	p, ok := <-output
 	if !ok {
-		return nil, io.EOF
+		return pair{nil, io.EOF}
 	}
-	return p.i, p.e
+	return p
 }
 
 func (dec *decoder) readFileBlock() (*OSMPBF.BlobHeader, *OSMPBF.Blob, error) {
