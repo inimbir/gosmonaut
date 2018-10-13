@@ -41,7 +41,7 @@ type Gosmonaut struct {
 	stream           chan osmPair
 	filename         string
 	types            OSMTypeSet
-	funcEntityNeeded func(OSMType, map[string]string) bool
+	funcEntityNeeded func(OSMType, OSMTags) bool
 	nodeIDCache      idCache
 	nodeCache        map[int64]Node
 	wayIDCache       idCache
@@ -67,7 +67,7 @@ type Gosmonaut struct {
 func NewGosmonaut(
 	filename string,
 	types OSMTypeSet,
-	funcEntityNeeded func(OSMType, map[string]string) bool,
+	funcEntityNeeded func(OSMType, OSMTags) bool,
 ) *Gosmonaut {
 	return &Gosmonaut{
 		stream:           make(chan osmPair, entitiesPerPrimitiveBlock),
@@ -175,7 +175,7 @@ func (g *Gosmonaut) Next() (OSMEntity, error) {
 	return p.i, p.e
 }
 
-func (g *Gosmonaut) entityNeeded(t OSMType, tags map[string]string) bool {
+func (g *Gosmonaut) entityNeeded(t OSMType, tags OSMTags) bool {
 	if !g.types.Get(t) {
 		return false
 	}

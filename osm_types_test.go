@@ -7,30 +7,31 @@ import (
 func TestOsmTypes(t *testing.T) {
 	// Construct some relation that contains all OSM types
 	relation := Relation{-10000,
-		map[string]string{
+		NewOSMTagsFromMap(map[string]string{
 			"type": "multipolygon",
 			"abc":  "xyz",
-		},
+		}),
 		[]Member{
 			Member{"outer",
 				Way{123,
-					map[string]string{
+					NewOSMTagsFromMap(map[string]string{
 						"point": "123.345",
-					},
+					}),
 					[]Node{
 						Node{1, 2, 3,
-							map[string]string{
+							NewOSMTagsFromMap(map[string]string{
 								"abc":        "xyz",
 								"test:hello": "",
-							},
+							}),
 						},
-						Node{-100, -1.234567812345678, 0, map[string]string{}},
+						Node{-100, -1.234567812345678, 0, NewOSMTags(0)},
+						Node{-99, 0, 0, NewOSMTagsFromMap(nil)},
 						Node{0, 0.5, 1.234567812345678, nil},
 					},
 				},
 			},
 			Member{"inner",
-				Node{5, 2, 3, map[string]string{}},
+				Node{5, 2, 3, NewOSMTagsFromMap(map[string]string{})},
 			},
 		},
 	}
@@ -65,6 +66,12 @@ func TestOsmTypes(t *testing.T) {
             "type": "node",
             "id": -100,
             "lat": -1.2345678,
+            "lon": 0.0000000
+          },
+          {
+            "type": "node",
+            "id": -99,
+            "lat": 0.0000000,
             "lon": 0.0000000
           },
           {

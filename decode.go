@@ -1,17 +1,16 @@
 package gosmonaut
 
 import (
+	"./OSMPBF"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"io"
 	"sync"
 	"time"
-
-	"./OSMPBF"
-	"github.com/golang/protobuf/proto"
 )
 
 const (
@@ -53,13 +52,13 @@ type Header struct {
 
 type rawWay struct {
 	ID      int64
-	Tags    map[string]string
+	Tags    OSMTags
 	NodeIDs []int64
 }
 
 type rawRelation struct {
 	ID      int64
-	Tags    map[string]string
+	Tags    OSMTags
 	Members []rawMember
 }
 

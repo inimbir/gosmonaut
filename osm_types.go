@@ -19,7 +19,7 @@ const (
 // OSMEntity is the common interface of all OSM entities
 type OSMEntity interface {
 	GetType() OSMType
-	GetTags() map[string]string
+	GetTags() OSMTags
 	fmt.Stringer
 }
 
@@ -30,7 +30,7 @@ type Node struct {
 	ID   int64
 	Lat  float64
 	Lon  float64
-	Tags map[string]string
+	Tags OSMTags
 }
 
 // GetType always returns NodeType
@@ -39,7 +39,7 @@ func (n Node) GetType() OSMType {
 }
 
 // GetTags returns the tags
-func (n Node) GetTags() map[string]string {
+func (n Node) GetTags() OSMTags {
 	return n.Tags
 }
 
@@ -50,11 +50,11 @@ func (n Node) String() string {
 // MarshalJSON prints the JSON representation of the node
 func (n Node) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		Type string            `json:"type"`
-		ID   int64             `json:"id"`
-		Lat  coordFloat        `json:"lat"`
-		Lon  coordFloat        `json:"lon"`
-		Tags map[string]string `json:"tags,omitempty"`
+		Type string     `json:"type"`
+		ID   int64      `json:"id"`
+		Lat  coordFloat `json:"lat"`
+		Lon  coordFloat `json:"lon"`
+		Tags OSMTags    `json:"tags,omitempty"`
 	}{"node", n.ID, coordFloat(n.Lat), coordFloat(n.Lon), n.Tags})
 }
 
@@ -63,7 +63,7 @@ func (n Node) MarshalJSON() ([]byte, error) {
 // Way represents an OSM way element
 type Way struct {
 	ID    int64
-	Tags  map[string]string
+	Tags  OSMTags
 	Nodes []Node
 }
 
@@ -73,7 +73,7 @@ func (w Way) GetType() OSMType {
 }
 
 // GetTags returns the tags
-func (w Way) GetTags() map[string]string {
+func (w Way) GetTags() OSMTags {
 	return w.Tags
 }
 
@@ -84,10 +84,10 @@ func (w Way) String() string {
 // MarshalJSON prints the JSON representation of the way
 func (w Way) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		Type  string            `json:"type"`
-		ID    int64             `json:"id"`
-		Tags  map[string]string `json:"tags"`
-		Nodes []Node            `json:"nodes"`
+		Type  string  `json:"type"`
+		ID    int64   `json:"id"`
+		Tags  OSMTags `json:"tags"`
+		Nodes []Node  `json:"nodes"`
 	}{"way", w.ID, w.Tags, w.Nodes})
 }
 
@@ -96,7 +96,7 @@ func (w Way) MarshalJSON() ([]byte, error) {
 // Relation represents an OSM relation element
 type Relation struct {
 	ID      int64
-	Tags    map[string]string
+	Tags    OSMTags
 	Members []Member
 }
 
@@ -106,7 +106,7 @@ func (r Relation) GetType() OSMType {
 }
 
 // GetTags returns the tags
-func (r Relation) GetTags() map[string]string {
+func (r Relation) GetTags() OSMTags {
 	return r.Tags
 }
 
@@ -117,10 +117,10 @@ func (r Relation) String() string {
 // MarshalJSON prints the JSON representation of the relation
 func (r Relation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		Type    string            `json:"type"`
-		ID      int64             `json:"id"`
-		Tags    map[string]string `json:"tags"`
-		Members []Member          `json:"members"`
+		Type    string   `json:"type"`
+		ID      int64    `json:"id"`
+		Tags    OSMTags  `json:"tags"`
+		Members []Member `json:"members"`
 	}{"relation", r.ID, r.Tags, r.Members})
 }
 

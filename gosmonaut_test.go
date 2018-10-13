@@ -41,9 +41,8 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 	// Test addresses
 	testGosmonaut(t, filename,
 		NewOSMTypeSet(true, true, true),
-		func(t OSMType, tags map[string]string) bool {
-			_, ok := tags["addr:housenumber"]
-			return ok
+		func(t OSMType, tags OSMTags) bool {
+			return tags.Has("addr:housenumber")
 		},
 		428593, 63528, 97,
 		loadTestdata(t, "addr_node.json"),
@@ -54,11 +53,8 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 	// Test restrictions
 	testGosmonaut(t, filename,
 		NewOSMTypeSet(false, false, true),
-		func(t OSMType, tags map[string]string) bool {
-			if _, ok := tags["type"]; ok {
-				return tags["type"] == "restriction"
-			}
-			return false
+		func(t OSMType, tags OSMTags) bool {
+			return tags.HasValue("type", "restriction")
 		},
 		18143, 3181, 1517,
 		"",
@@ -68,7 +64,7 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 
 	testGosmonaut(t, filename,
 		NewOSMTypeSet(false, false, false),
-		func(t OSMType, tags map[string]string) bool {
+		func(t OSMType, tags OSMTags) bool {
 			return true
 		},
 		0, 0, 0,
@@ -77,7 +73,7 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 
 	testGosmonaut(t, filename,
 		NewOSMTypeSet(true, true, true),
-		func(t OSMType, tags map[string]string) bool {
+		func(t OSMType, tags OSMTags) bool {
 			return false
 		},
 		0, 0, 0,
@@ -89,7 +85,7 @@ func testGosmonaut(
 	t *testing.T,
 	filename string,
 	types OSMTypeSet,
-	f func(OSMType, map[string]string) bool,
+	f func(OSMType, OSMTags) bool,
 	nc, wc, rc int, // Number of total entities per type
 	ns, ws, rs string, // JSON string of the first entity per type
 ) {
