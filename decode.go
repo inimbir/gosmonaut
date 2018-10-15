@@ -3,7 +3,6 @@ package gosmonaut
 import (
 	"./OSMPBF"
 	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -68,101 +67,147 @@ type rawMember struct {
 	Role string
 }
 
-type pair struct {
-	i interface{}
-	e error
+type decodeInput struct {
+	blob *OSMPBF.Blob
+	pos  filePosition
+	err  error
+}
+
+type decodeOutput struct {
+	entities []interface{}
+	types    OSMTypeSet
+	pos      filePosition
+	err      error
 }
 
 // A Decoder reads and decodes OpenStreetMap PBF data from an input stream.
 type decoder struct {
-	r io.Reader
+	nProcs int
+	nRun   int
+	wg     sync.WaitGroup
 
-	buf *bytes.Buffer
-
-	// store header block
+	// Store header block
 	header *Header
-	// synchronize header deserialization
-	headerOnce sync.Once
 
-	// for data decoders
-	inputs      []chan<- pair
-	outputs     []<-chan pair
-	nProcs      int
+	// Blob providers
+	nodeIndexer, wayIndexer, relationIndexer *blobIndexer
+	finder                                   *blobFinder
+
+	// For data decoders
+	inputs      []chan<- decodeInput
+	outputs     []<-chan decodeOutput
 	outputIndex int
 }
 
 // newDecoder returns a new decoder that reads from r.
-func newDecoder(r io.Reader, n int) *decoder {
+func newDecoder(f io.ReadSeeker, n int) *decoder {
 	if n < 1 {
 		n = 1
 	}
-	d := &decoder{
-		r:      r,
-		nProcs: n,
+	buf := bytes.NewBuffer(make([]byte, 0, initialBlobBufSize))
+
+	return &decoder{
+		nProcs:          n,
+		finder:          &blobFinder{f, buf},
+		nodeIndexer:     newBlobIndexer(f, buf),
+		wayIndexer:      newBlobIndexer(f, buf),
+		relationIndexer: newBlobIndexer(f, buf),
 	}
-	d.SetBufferSize(maxBlobSize)
-	return d
-}
-
-// SetBufferSize sets initial size of decoding buffer. Default value is 1MB, you can set higher value
-// (for example, maxBlobSize) for (probably) faster decoding, or lower value for reduced memory consumption.
-// Any value will produce valid results; buffer will grow automatically if required.
-func (dec *decoder) SetBufferSize(n int) {
-	dec.buf = bytes.NewBuffer(make([]byte, 0, n))
-}
-
-// Header returns file header.
-func (dec *decoder) Header() (*Header, error) {
-	// deserialize the file header
-	return dec.header, dec.readOSMHeader()
 }
 
 // Start decoding process using n goroutines.
 func (dec *decoder) Start(t OSMType) error {
-	if err := dec.readOSMHeader(); err != nil {
-		return err
+	// Wait for the previous run to finish
+	dec.wg.Wait()
+
+	dec.nRun++
+	dec.outputIndex = 0
+
+	// Read OSM header
+	if dec.nRun == 1 {
+		blob, err := dec.finder.readHeaderBlob()
+		if err != nil {
+			return err
+		}
+
+		if header, err := decodeOSMHeader(blob); err == nil {
+			dec.header = header
+		} else {
+			return err
+		}
 	}
 
-	// start data decoders
+	// Start data decoders
+	dec.inputs = make([]chan<- decodeInput, 0, dec.nProcs)
+	dec.outputs = make([]<-chan decodeOutput, 0, dec.nProcs)
+	dec.wg.Add(dec.nProcs)
 	for i := 0; i < dec.nProcs; i++ {
-		input := make(chan pair)
-		output := make(chan pair)
+		input := make(chan decodeInput)
+		output := make(chan decodeOutput)
 		go func() {
+			defer dec.wg.Done()
 			dd := new(dataDecoder)
-			for p := range input {
-				if p.e == nil {
-					// send decoded objects or decoding error
-					objects, err := dd.Decode(p.i.(*OSMPBF.Blob), t)
-					output <- pair{objects, err}
+			for i := range input {
+				if i.err == nil {
+					// Decode objects and send to ouput
+					entities, types, err := dd.Decode(i.blob, t)
+					output <- decodeOutput{
+						entities: entities,
+						types:    types,
+						pos:      i.pos,
+						err:      err,
+					}
 				} else {
-					// send input error as is
-					output <- pair{nil, p.e}
+					// Send input error as is
+					output <- decodeOutput{
+						err: i.err,
+					}
 				}
 			}
 			close(output)
 		}()
-
 		dec.inputs = append(dec.inputs, input)
 		dec.outputs = append(dec.outputs, output)
 	}
 
-	// start reading OSMData
+	// Select the blob provider
+	var provider blobProvider
+	if dec.nRun == 1 {
+		provider = dec.finder
+	} else {
+		var indexer *blobIndexer
+		switch t {
+		case NodeType:
+			indexer = dec.nodeIndexer
+		case WayType:
+			indexer = dec.wayIndexer
+		case RelationType:
+			indexer = dec.relationIndexer
+		}
+		indexer.reset()
+		provider = indexer
+	}
+
+	// Start reading OSMData blobs
 	go func() {
 		var inputIndex int
 		for {
+			// Select input channel
 			input := dec.inputs[inputIndex]
 			inputIndex = (inputIndex + 1) % dec.nProcs
 
-			blobHeader, blob, err := dec.readFileBlock()
-			if err == nil && blobHeader.GetType() != "OSMData" {
-				err = fmt.Errorf("unexpected fileblock of type %s", blobHeader.GetType())
+			// Read next blob
+			blob, pos, err := provider.readDataBlob()
+
+			// Send blob for decoding
+			input <- decodeInput{
+				blob: blob,
+				pos:  pos,
+				err:  err,
 			}
-			if err == nil {
-				// send blob for decoding
-				input <- pair{blob, nil}
-			} else {
-				// send input error as is
-				input <- pair{nil, err}
+
+			// On error close input channels and quit
+			if err != nil {
 				for _, input := range dec.inputs {
 					close(input)
 				}
@@ -170,144 +215,51 @@ func (dec *decoder) Start(t OSMType) error {
 			}
 		}
 	}()
-
 	return nil
 }
 
-func (dec *decoder) nextPair() pair {
+func (dec *decoder) nextPair() ([]interface{}, error) {
+	// Select output channel
 	output := dec.outputs[dec.outputIndex]
 	dec.outputIndex = (dec.outputIndex + 1) % dec.nProcs
 
-	p, ok := <-output
+	// Get output
+	o, ok := <-output
 	if !ok {
-		return pair{nil, io.EOF}
-	}
-	return p
-}
-
-func (dec *decoder) readFileBlock() (*OSMPBF.BlobHeader, *OSMPBF.Blob, error) {
-	blobHeaderSize, err := dec.readBlobHeaderSize()
-	if err != nil {
-		return nil, nil, err
+		return nil, io.EOF
 	}
 
-	blobHeader, err := dec.readBlobHeader(blobHeaderSize)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blob, err := dec.readBlob(blobHeader)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return blobHeader, blob, err
-}
-
-func (dec *decoder) readBlobHeaderSize() (uint32, error) {
-	dec.buf.Reset()
-	if _, err := io.CopyN(dec.buf, dec.r, 4); err != nil {
-		return 0, err
-	}
-
-	size := binary.BigEndian.Uint32(dec.buf.Bytes())
-
-	if size >= maxBlobHeaderSize {
-		return 0, errors.New("BlobHeader size >= 64Kb")
-	}
-	return size, nil
-}
-
-func (dec *decoder) readBlobHeader(size uint32) (*OSMPBF.BlobHeader, error) {
-	dec.buf.Reset()
-	if _, err := io.CopyN(dec.buf, dec.r, int64(size)); err != nil {
-		return nil, err
-	}
-
-	blobHeader := new(OSMPBF.BlobHeader)
-	if err := proto.Unmarshal(dec.buf.Bytes(), blobHeader); err != nil {
-		return nil, err
-	}
-
-	if blobHeader.GetDatasize() >= maxBlobSize {
-		return nil, errors.New("Blob size >= 32Mb")
-	}
-	return blobHeader, nil
-}
-
-func (dec *decoder) readBlob(blobHeader *OSMPBF.BlobHeader) (*OSMPBF.Blob, error) {
-	dec.buf.Reset()
-	if _, err := io.CopyN(dec.buf, dec.r, int64(blobHeader.GetDatasize())); err != nil {
-		return nil, err
-	}
-
-	blob := new(OSMPBF.Blob)
-	if err := proto.Unmarshal(dec.buf.Bytes(), blob); err != nil {
-		return nil, err
-	}
-	return blob, nil
-}
-
-func getData(blob *OSMPBF.Blob) ([]byte, error) {
-	switch {
-	case blob.Raw != nil:
-		return blob.GetRaw(), nil
-
-	case blob.ZlibData != nil:
-		r, err := zlib.NewReader(bytes.NewReader(blob.GetZlibData()))
-		if err != nil {
-			return nil, err
+	// Index file position of entity types
+	if dec.nRun == 1 {
+		if o.types.Get(NodeType) {
+			dec.nodeIndexer.index(o.pos)
 		}
-		buf := bytes.NewBuffer(make([]byte, 0, blob.GetRawSize()+bytes.MinRead))
-		_, err = buf.ReadFrom(r)
-		if err != nil {
-			return nil, err
+		if o.types.Get(WayType) {
+			dec.wayIndexer.index(o.pos)
 		}
-		if buf.Len() != int(blob.GetRawSize()) {
-			err = fmt.Errorf("raw blob data size %d but expected %d", buf.Len(), blob.GetRawSize())
-			return nil, err
+		if o.types.Get(RelationType) {
+			dec.relationIndexer.index(o.pos)
 		}
-		return buf.Bytes(), nil
-
-	default:
-		return nil, errors.New("unknown blob data")
 	}
+	return o.entities, o.err
 }
 
-func (dec *decoder) readOSMHeader() error {
-	var err error
-	dec.headerOnce.Do(func() {
-		var blobHeader *OSMPBF.BlobHeader
-		var blob *OSMPBF.Blob
-		blobHeader, blob, err = dec.readFileBlock()
-		if err == nil {
-			if blobHeader.GetType() == "OSMHeader" {
-				err = dec.decodeOSMHeader(blob)
-			} else {
-				err = fmt.Errorf("unexpected first fileblock of type %s", blobHeader.GetType())
-			}
-		}
-	})
-
-	return err
-}
-
-func (dec *decoder) decodeOSMHeader(blob *OSMPBF.Blob) error {
-	data, err := getData(blob)
+func decodeOSMHeader(blob *OSMPBF.Blob) (*Header, error) {
+	data, err := getBlobData(blob)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	headerBlock := new(OSMPBF.HeaderBlock)
 	if err := proto.Unmarshal(data, headerBlock); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check we have the parse capabilities
 	requiredFeatures := headerBlock.GetRequiredFeatures()
 	for _, feature := range requiredFeatures {
 		if !parseCapabilities[feature] {
-			return fmt.Errorf("parser does not have %s capability", feature)
+			return nil, fmt.Errorf("parser does not have %s capability", feature)
 		}
 	}
 
@@ -335,8 +287,150 @@ func (dec *decoder) decodeOSMHeader(blob *OSMPBF.Blob) error {
 			Top:    1e-9 * float64(*headerBlock.Bbox.Top),
 		}
 	}
+	return header, nil
+}
 
-	dec.header = header
+/* Blob Provider */
+type filePosition struct {
+	offset, size int64
+}
 
-	return nil
+type blobProvider interface {
+	readDataBlob() (*OSMPBF.Blob, filePosition, error)
+}
+
+func unmarshalBlob(buf *bytes.Buffer) (*OSMPBF.Blob, error) {
+	blob := new(OSMPBF.Blob)
+	err := proto.Unmarshal(buf.Bytes(), blob)
+	return blob, err
+}
+
+/* Blob Indexer */
+type blobIndexer struct {
+	f     io.ReadSeeker
+	buf   *bytes.Buffer
+	blobs []filePosition
+	i     int
+}
+
+func newBlobIndexer(f io.ReadSeeker, buf *bytes.Buffer) *blobIndexer {
+	return &blobIndexer{
+		f:   f,
+		buf: buf,
+	}
+}
+
+func (b *blobIndexer) index(pos filePosition) {
+	b.blobs = append(b.blobs, pos)
+}
+
+func (b *blobIndexer) reset() {
+	b.i = 0
+}
+
+func (b *blobIndexer) readDataBlob() (blob *OSMPBF.Blob, pos filePosition, err error) {
+	if b.i >= len(b.blobs) {
+		err = io.EOF
+		return
+	}
+
+	// Read next file position
+	pos = b.blobs[b.i]
+	b.i++
+
+	// Read blob
+	b.f.Seek(pos.offset, io.SeekStart)
+	b.buf.Reset()
+	_, err = io.CopyN(b.buf, b.f, pos.size)
+	if err != nil {
+		return
+	}
+
+	// Unmarshal blob
+	blob, err = unmarshalBlob(b.buf)
+	return
+}
+
+/* Blob Decoder */
+type blobFinder struct {
+	f   io.ReadSeeker
+	buf *bytes.Buffer
+}
+
+func (d *blobFinder) readHeaderBlob() (*OSMPBF.Blob, error) {
+	blob, _, err := d.readFileBlock("OSMHeader")
+	return blob, err
+}
+
+func (d *blobFinder) readDataBlob() (*OSMPBF.Blob, filePosition, error) {
+	return d.readFileBlock("OSMData")
+}
+
+func (d *blobFinder) readFileBlock(t string) (blob *OSMPBF.Blob, pos filePosition, err error) {
+	blobHeaderSize, err := d.readBlobHeaderSize()
+	if err != nil {
+		return
+	}
+
+	blobHeader, err := d.readBlobHeader(blobHeaderSize)
+	if err != nil {
+		return
+	}
+
+	if blobHeader.GetType() != t {
+		err = fmt.Errorf("unexpected fileblock of type %s", blobHeader.GetType())
+		return
+	}
+
+	offset, err := d.f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return
+	}
+
+	pos = filePosition{
+		offset,
+		int64(blobHeader.GetDatasize()),
+	}
+
+	blob, err = d.readBlob(blobHeader)
+	return
+}
+
+func (d *blobFinder) readBlobHeaderSize() (uint32, error) {
+	d.buf.Reset()
+	if _, err := io.CopyN(d.buf, d.f, 4); err != nil {
+		return 0, err
+	}
+
+	size := binary.BigEndian.Uint32(d.buf.Bytes())
+	if size >= maxBlobHeaderSize {
+		return 0, errors.New("BlobHeader size >= 64Kb")
+	}
+	return size, nil
+}
+
+func (d *blobFinder) readBlobHeader(size uint32) (*OSMPBF.BlobHeader, error) {
+	d.buf.Reset()
+	if _, err := io.CopyN(d.buf, d.f, int64(size)); err != nil {
+		return nil, err
+	}
+
+	blobHeader := new(OSMPBF.BlobHeader)
+	if err := proto.Unmarshal(d.buf.Bytes(), blobHeader); err != nil {
+		return nil, err
+	}
+
+	if blobHeader.GetDatasize() >= maxBlobSize {
+		return nil, errors.New("Blob size >= 32Mb")
+	}
+	return blobHeader, nil
+}
+
+func (d *blobFinder) readBlob(blobHeader *OSMPBF.BlobHeader) (*OSMPBF.Blob, error) {
+	d.buf.Reset()
+	size := int64(blobHeader.GetDatasize())
+	if _, err := io.CopyN(d.buf, d.f, size); err != nil {
+		return nil, err
+	}
+	return unmarshalBlob(d.buf)
 }

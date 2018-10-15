@@ -2,6 +2,10 @@ package gosmonaut
 
 import (
 	"./OSMPBF"
+	"bytes"
+	"compress/zlib"
+	"errors"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -10,21 +14,48 @@ type dataDecoder struct {
 	q []interface{}
 }
 
-func (dec *dataDecoder) Decode(blob *OSMPBF.Blob, t OSMType) ([]interface{}, error) {
-	dec.q = make([]interface{}, 0, 8000) // typical PrimitiveBlock contains 8k OSM entities
-
-	data, err := getData(blob)
+func (dec *dataDecoder) Decode(blob *OSMPBF.Blob, t OSMType) ([]interface{}, OSMTypeSet, error) {
+	data, err := getBlobData(blob)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	primitiveBlock := &OSMPBF.PrimitiveBlock{}
+	primitiveBlock := new(OSMPBF.PrimitiveBlock)
 	if err := proto.Unmarshal(data, primitiveBlock); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	dec.parsePrimitiveBlock(primitiveBlock, t)
-	return dec.q, nil
+	// Count entities per type
+	nc, wc, rc := dec.countTypes(primitiveBlock)
+	types := NewOSMTypeSet(nc > 0, wc > 0, rc > 0)
+	var n int
+	switch t {
+	case NodeType:
+		n = nc
+	case WayType:
+		n = wc
+	case RelationType:
+		n = rc
+	}
+
+	// Build entities
+	if n > 0 {
+		dec.q = make([]interface{}, 0, n)
+		dec.parsePrimitiveBlock(primitiveBlock, t)
+	} else {
+		dec.q = nil
+	}
+	return dec.q, types, nil
+}
+
+func (dec *dataDecoder) countTypes(pb *OSMPBF.PrimitiveBlock) (nc, wc, rc int) {
+	for _, pg := range pb.GetPrimitivegroup() {
+		nc += len(pg.GetNodes())
+		nc += len(pg.GetDense().GetId())
+		wc += len(pg.GetWays())
+		rc += len(pg.GetRelations())
+	}
+	return
 }
 
 func (dec *dataDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock, t OSMType) {
@@ -148,5 +179,31 @@ func (dec *dataDecoder) parseRelations(pb *OSMPBF.PrimitiveBlock, relations []*O
 		members := extractMembers(st, rel)
 
 		dec.q = append(dec.q, rawRelation{id, tags, members})
+	}
+}
+
+func getBlobData(blob *OSMPBF.Blob) ([]byte, error) {
+	switch {
+	case blob.Raw != nil:
+		return blob.GetRaw(), nil
+
+	case blob.ZlibData != nil:
+		r, err := zlib.NewReader(bytes.NewReader(blob.GetZlibData()))
+		if err != nil {
+			return nil, err
+		}
+		buf := bytes.NewBuffer(make([]byte, 0, blob.GetRawSize()+bytes.MinRead))
+		_, err = buf.ReadFrom(r)
+		if err != nil {
+			return nil, err
+		}
+		if buf.Len() != int(blob.GetRawSize()) {
+			err = fmt.Errorf("raw blob data size %d but expected %d", buf.Len(), blob.GetRawSize())
+			return nil, err
+		}
+		return buf.Bytes(), nil
+
+	default:
+		return nil, errors.New("unknown blob data")
 	}
 }

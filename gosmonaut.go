@@ -1,7 +1,6 @@
 package gosmonaut
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -38,16 +37,25 @@ type osmPair struct {
 // Gosmonaut is responsible for decoding an OpenStreetMap pbf file.
 // For creating an instance the NewGosmonaut() function must be used.
 type Gosmonaut struct {
-	stream           chan osmPair
+	dec    *decoder
+	stream chan osmPair
+
+	// Defined by caller
 	filename         string
 	types            OSMTypeSet
 	funcEntityNeeded func(OSMType, OSMTags) bool
-	nodeIDCache      idCache
-	nodeCache        map[int64]Node
-	wayIDCache       idCache
-	wayCache         map[int64]Way
-	timeStarted      time.Time
-	timeLast         time.Time
+
+	// ID caches
+	nodeIDCache idCache
+	wayIDCache  idCache
+
+	// Entitiy caches
+	nodeCache map[int64]Node
+	wayCache  map[int64]Way
+
+	// For debug mode
+	timeStarted time.Time
+	timeLast    time.Time
 
 	// DebugMode prints warnings during decoding.
 	// Also duration and memory info will be printed after every processing step
@@ -93,6 +101,25 @@ func (g *Gosmonaut) Start() {
 
 		defer close(g.stream)
 
+		// Open file
+		f, err := os.Open(g.filename)
+		if err != nil {
+			g.streamError(err)
+			return
+		}
+		defer f.Close()
+
+		// Determine number of processes
+		var nProcs int
+		if g.NumProcessors != 0 {
+			nProcs = g.NumProcessors
+		} else {
+			nProcs = runtime.NumCPU()
+		}
+
+		// Create decoder
+		g.dec = newDecoder(f, nProcs)
+
 		// Scan relation dependencies
 		if g.types.Get(RelationType) {
 			if err := g.scanRelationDependencies(); err != nil {
@@ -130,6 +157,9 @@ func (g *Gosmonaut) Start() {
 				return
 			}
 			g.printDebugInfo("Scanned nodes")
+
+			g.nodeIDCache = nil
+			g.printDebugInfo("Deleted node ID cache")
 		}
 
 		// Scan ways
@@ -139,6 +169,9 @@ func (g *Gosmonaut) Start() {
 				return
 			}
 			g.printDebugInfo("Scanned ways")
+
+			g.wayIDCache = nil
+			g.printDebugInfo("Deleted way ID cache")
 		}
 
 		// Scan relations
@@ -331,41 +364,19 @@ func (g *Gosmonaut) scanRelations() error {
 }
 
 func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
-	// Open file
-	f, err := os.Open(g.filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// Determine number of processes
-	var nProcs int
-	if g.NumProcessors != 0 {
-		nProcs = g.NumProcessors
-	} else {
-		nProcs = runtime.NumCPU()
-	}
-
-	// Create decoder
-	d := newDecoder(f, nProcs)
-	if err := d.Start(t); err != nil {
+	if err := g.dec.Start(t); err != nil {
 		return err
 	}
 
 	// Decode file
 	for {
-		if pair := d.nextPair(); pair.e == io.EOF {
+		if entities, err := g.dec.nextPair(); err == io.EOF {
 			break
-		} else if pair.e != nil {
-			return pair.e
+		} else if err != nil {
+			return err
 		} else {
-			i, ok := pair.i.([]interface{})
-			if !ok {
-				return errors.New("Decoder did not return a slice")
-			}
-
 			// Send to receiver
-			for _, v := range i {
+			for _, v := range entities {
 				if err := receiver(v); err != nil {
 					return err
 				}
