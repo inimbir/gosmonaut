@@ -93,7 +93,7 @@ func (dec *dataDecoder) parseNodes(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.No
 
 		tags := extractTags(st, node.GetKeys(), node.GetVals())
 
-		dec.q = append(dec.q, Node{id, latitude, longitude, tags})
+		dec.q = append(dec.q, &Node{id, latitude, longitude, tags})
 	}
 
 }
@@ -117,7 +117,7 @@ func (dec *dataDecoder) parseDenseNodes(pb *OSMPBF.PrimitiveBlock, dn *OSMPBF.De
 		longitude := 1e-9 * float64((lonOffset + (granularity * lon)))
 		tags := tu.next()
 
-		dec.q = append(dec.q, Node{id, latitude, longitude, tags})
+		dec.q = append(dec.q, &Node{id, latitude, longitude, tags})
 	}
 }
 

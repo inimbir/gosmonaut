@@ -8,26 +8,6 @@ import (
 	"time"
 )
 
-/* ID Cache */
-type idCache map[int64]struct{}
-
-func newIDCache() idCache {
-	return idCache{}
-}
-
-func (c idCache) add(id int64) {
-	c[id] = struct{}{}
-}
-
-func (c idCache) contains(id int64) bool {
-	_, ok := c[id]
-	return ok
-}
-
-func (c idCache) len() int {
-	return len(c)
-}
-
 /* Gosmonaut */
 type osmPair struct {
 	i OSMEntity
@@ -45,13 +25,9 @@ type Gosmonaut struct {
 	types            OSMTypeSet
 	funcEntityNeeded func(OSMType, OSMTags) bool
 
-	// ID caches
-	nodeIDCache idCache
-	wayIDCache  idCache
-
 	// Entitiy caches
-	nodeCache map[int64]Node
-	wayCache  map[int64]Way
+	nodeCache map[int64]*Node
+	wayCache  map[int64]*Way
 
 	// For debug mode
 	timeStarted time.Time
@@ -82,8 +58,8 @@ func NewGosmonaut(
 		filename:         filename,
 		types:            types,
 		funcEntityNeeded: funcEntityNeeded,
-		nodeIDCache:      newIDCache(),
-		wayIDCache:       newIDCache(),
+		nodeCache:        map[int64]*Node{},
+		wayCache:         map[int64]*Way{},
 	}
 }
 
@@ -126,52 +102,34 @@ func (g *Gosmonaut) Start() {
 				g.streamError(err)
 				return
 			}
-			g.printDebugInfo("Scanned relation dependencies")
-		}
-
-		// Create way cache
-		if g.wayIDCache.len() != 0 {
-			g.wayCache = make(map[int64]Way, g.wayIDCache.len())
-			g.printDebugInfo(fmt.Sprintf("Created way cache [length: %d]", g.wayIDCache.len()))
+			g.printDebugInfo(fmt.Sprintf("Scanned relation dependencies [length: %d]", len(g.wayCache)))
 		}
 
 		// Scan way dependencies
-		if g.types.Get(WayType) || g.wayIDCache.len() != 0 {
+		if g.types.Get(WayType) || len(g.wayCache) != 0 {
 			if err := g.scanWayDependencies(); err != nil {
 				g.streamError(err)
 				return
 			}
-			g.printDebugInfo("Scanned way dependencies")
-		}
-
-		// Create node cache
-		if g.nodeIDCache.len() != 0 {
-			g.nodeCache = make(map[int64]Node, g.nodeIDCache.len())
-			g.printDebugInfo(fmt.Sprintf("Created node cache [length: %d]", g.nodeIDCache.len()))
+			g.printDebugInfo(fmt.Sprintf("Scanned way dependencies [length: %d]", len(g.nodeCache)))
 		}
 
 		// Scan nodes
-		if g.types.Get(NodeType) || g.nodeIDCache.len() != 0 {
+		if g.types.Get(NodeType) || len(g.nodeCache) != 0 {
 			if err := g.scanNodes(); err != nil {
 				g.streamError(err)
 				return
 			}
 			g.printDebugInfo("Scanned nodes")
-
-			g.nodeIDCache = nil
-			g.printDebugInfo("Deleted node ID cache")
 		}
 
 		// Scan ways
-		if g.types.Get(WayType) || g.wayIDCache.len() != 0 {
+		if g.types.Get(WayType) || len(g.wayCache) != 0 {
 			if err := g.scanWays(); err != nil {
 				g.streamError(err)
 				return
 			}
 			g.printDebugInfo("Scanned ways")
-
-			g.wayIDCache = nil
-			g.printDebugInfo("Deleted way ID cache")
 		}
 
 		// Scan relations
@@ -227,9 +185,9 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 			for _, m := range r.Members {
 				switch m.Type {
 				case WayType:
-					g.wayIDCache.add(m.ID)
+					g.wayCache[m.ID] = nil
 				case NodeType:
-					g.nodeIDCache.add(m.ID)
+					g.nodeCache[m.ID] = nil
 				case RelationType:
 					// We don't support sub-relations yet
 				}
@@ -246,10 +204,10 @@ func (g *Gosmonaut) scanWayDependencies() error {
 			return fmt.Errorf("Got invalid way from decoder (%T)", v)
 		}
 
-		if g.wayIDCache.contains(w.ID) || g.entityNeeded(WayType, w.Tags) {
+		if _, ok = g.wayCache[w.ID]; ok || g.entityNeeded(WayType, w.Tags) {
 			// Add nodes to ID cache
 			for _, id := range w.NodeIDs {
-				g.nodeIDCache.add(id)
+				g.nodeCache[id] = nil
 			}
 		}
 		return nil
@@ -258,19 +216,19 @@ func (g *Gosmonaut) scanWayDependencies() error {
 
 func (g *Gosmonaut) scanNodes() error {
 	return g.scan(NodeType, func(v interface{}) error {
-		n, ok := v.(Node)
+		n, ok := v.(*Node)
 		if !ok {
 			return fmt.Errorf("Got invalid node from decoder (%T)", v)
 		}
 
 		// Add to node cache
-		if g.nodeIDCache.contains(n.ID) {
+		if _, ok = g.nodeCache[n.ID]; ok {
 			g.nodeCache[n.ID] = n
 		}
 
 		// Send to output stream
 		if g.entityNeeded(NodeType, n.Tags) {
-			g.streamEntity(n)
+			g.streamEntity(*n)
 		}
 		return nil
 	})
@@ -284,15 +242,15 @@ func (g *Gosmonaut) scanWays() error {
 		}
 
 		// Needed by cache or stream?
-		if !g.wayIDCache.contains(raw.ID) && !g.entityNeeded(WayType, raw.Tags) {
+		if _, ok = g.wayCache[raw.ID]; !ok && !g.entityNeeded(WayType, raw.Tags) {
 			return nil
 		}
 
 		// Build nodes
 		nodes := make([]Node, 0, len(raw.NodeIDs))
 		for _, id := range raw.NodeIDs {
-			if n, ok := g.nodeCache[id]; ok {
-				nodes = append(nodes, n)
+			if n, ok := g.nodeCache[id]; ok && n != nil {
+				nodes = append(nodes, *n)
 			} else {
 				return fmt.Errorf("Node #%d in not in file for way #%d", id, raw.ID)
 			}
@@ -302,8 +260,8 @@ func (g *Gosmonaut) scanWays() error {
 		w := Way{raw.ID, raw.Tags, nodes}
 
 		// Add to way cache
-		if g.wayIDCache.contains(w.ID) {
-			g.wayCache[w.ID] = w
+		if _, ok := g.wayCache[w.ID]; ok {
+			g.wayCache[w.ID] = &w
 		}
 
 		// Send to output stream
@@ -332,15 +290,15 @@ func (g *Gosmonaut) scanRelations() error {
 			var i OSMEntity
 			switch rawm.Type {
 			case WayType:
-				if w, ok := g.wayCache[rawm.ID]; ok {
-					i = w
+				if w, ok := g.wayCache[rawm.ID]; ok && w != nil {
+					i = *w
 				} else {
 					g.printWarning(fmt.Sprintf("Way #%d in not in file for relation #%d", rawm.ID, raw.ID))
 					continue
 				}
 			case NodeType:
-				if n, ok := g.nodeCache[rawm.ID]; ok {
-					i = n
+				if n, ok := g.nodeCache[rawm.ID]; ok && n != nil {
+					i = *n
 				} else {
 					g.printWarning(fmt.Sprintf("Node #%d in not in file for relation #%d", rawm.ID, raw.ID))
 					continue
