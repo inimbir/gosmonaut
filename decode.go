@@ -49,24 +49,6 @@ type Header struct {
 	OsmosisReplicationBaseURL        string
 }
 
-type rawWay struct {
-	ID      int64
-	Tags    OSMTags
-	NodeIDs []int64
-}
-
-type rawRelation struct {
-	ID      int64
-	Tags    OSMTags
-	Members []rawMember
-}
-
-type rawMember struct {
-	ID   int64
-	Type OSMType
-	Role string
-}
-
 type decodeInput struct {
 	blob *OSMPBF.Blob
 	pos  filePosition

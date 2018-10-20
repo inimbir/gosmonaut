@@ -175,20 +175,30 @@ func (g *Gosmonaut) entityNeeded(t OSMType, tags OSMTags) bool {
 
 func (g *Gosmonaut) scanRelationDependencies() error {
 	return g.scan(RelationType, func(v interface{}) error {
-		r, ok := v.(rawRelation)
+		d, ok := v.(*relationParser)
 		if !ok {
-			return fmt.Errorf("Got invalid relation from decoder (%T)", v)
+			return fmt.Errorf("Got invalid relation parser (%T)", v)
 		}
 
-		if g.entityNeeded(RelationType, r.Tags) {
+		for {
+			_, tags, ok := d.next()
+			if !ok {
+				break
+			}
+
+			if !g.entityNeeded(RelationType, tags) {
+				continue
+			}
+
 			// Add members to ID caches
-			for _, m := range r.Members {
-				switch m.Type {
+			ids := d.ids()
+			types := d.types()
+			for i, id := range ids {
+				switch types[i] {
 				case WayType:
-					g.wayCache[m.ID] = nil
+					g.wayCache[id] = nil
 				case NodeType:
-					g.nodeCache[m.ID] = nil
-				case RelationType:
+					g.nodeCache[id] = nil
 					// We don't support sub-relations yet
 				}
 			}
@@ -199,15 +209,23 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 
 func (g *Gosmonaut) scanWayDependencies() error {
 	return g.scan(WayType, func(v interface{}) error {
-		w, ok := v.(rawWay)
+		d, ok := v.(*wayParser)
 		if !ok {
-			return fmt.Errorf("Got invalid way from decoder (%T)", v)
+			return fmt.Errorf("Got invalid way parser (%T)", v)
 		}
 
-		if _, ok = g.wayCache[w.ID]; ok || g.entityNeeded(WayType, w.Tags) {
-			// Add nodes to ID cache
-			for _, id := range w.NodeIDs {
-				g.nodeCache[id] = nil
+		for {
+			id, tags, ok := d.next()
+			if !ok {
+				break
+			}
+
+			if _, ok = g.wayCache[id]; ok || g.entityNeeded(WayType, tags) {
+				// Add nodes to ID cache
+				refs := d.refs()
+				for _, id := range refs {
+					g.nodeCache[id] = nil
+				}
 			}
 		}
 		return nil
@@ -216,19 +234,26 @@ func (g *Gosmonaut) scanWayDependencies() error {
 
 func (g *Gosmonaut) scanNodes() error {
 	return g.scan(NodeType, func(v interface{}) error {
-		n, ok := v.(*Node)
+		d, ok := v.(nodeParser)
 		if !ok {
-			return fmt.Errorf("Got invalid node from decoder (%T)", v)
+			return fmt.Errorf("Got invalid node parser (%T)", v)
 		}
 
-		// Add to node cache
-		if _, ok = g.nodeCache[n.ID]; ok {
-			g.nodeCache[n.ID] = n
-		}
+		for {
+			id, lat, lon, tags, ok := d.next()
+			if !ok {
+				break
+			}
 
-		// Send to output stream
-		if g.entityNeeded(NodeType, n.Tags) {
-			g.streamEntity(*n)
+			// Add to node cache
+			if _, ok := g.nodeCache[id]; ok {
+				g.nodeCache[id] = &Node{id, lat, lon, tags}
+			}
+
+			// Send to output stream
+			if g.entityNeeded(NodeType, tags) {
+				g.streamEntity(Node{id, lat, lon, tags})
+			}
 		}
 		return nil
 	})
@@ -236,37 +261,44 @@ func (g *Gosmonaut) scanNodes() error {
 
 func (g *Gosmonaut) scanWays() error {
 	return g.scan(WayType, func(v interface{}) error {
-		raw, ok := v.(rawWay)
+		d, ok := v.(*wayParser)
 		if !ok {
-			return fmt.Errorf("Got invalid way from decoder (%T)", v)
+			return fmt.Errorf("Got invalid way parser (%T)", v)
 		}
 
-		// Needed by cache or stream?
-		if _, ok = g.wayCache[raw.ID]; !ok && !g.entityNeeded(WayType, raw.Tags) {
-			return nil
-		}
-
-		// Build nodes
-		nodes := make([]Node, 0, len(raw.NodeIDs))
-		for _, id := range raw.NodeIDs {
-			if n, ok := g.nodeCache[id]; ok && n != nil {
-				nodes = append(nodes, *n)
-			} else {
-				return fmt.Errorf("Node #%d in not in file for way #%d", id, raw.ID)
+		for {
+			id, tags, ok := d.next()
+			if !ok {
+				break
 			}
-		}
 
-		// Build way
-		w := Way{raw.ID, raw.Tags, nodes}
+			// Needed by cache or stream?
+			_, reqCache := g.wayCache[id]
+			reqStream := g.entityNeeded(WayType, tags)
+			if !reqCache && !reqStream {
+				continue
+			}
 
-		// Add to way cache
-		if _, ok := g.wayCache[w.ID]; ok {
-			g.wayCache[w.ID] = &w
-		}
+			// Build nodes
+			refs := d.refs()
+			nodes := make([]Node, len(refs))
+			for i, rid := range refs {
+				if n, ok := g.nodeCache[rid]; ok && n != nil {
+					nodes[i] = *n
+				} else {
+					return fmt.Errorf("Node #%d in not in file for way #%d", rid, id)
+				}
+			}
 
-		// Send to output stream
-		if g.entityNeeded(WayType, w.Tags) {
-			g.streamEntity(w)
+			// Add to way cache
+			if reqCache {
+				g.wayCache[id] = &Way{id, tags, nodes}
+			}
+
+			// Send to output stream
+			if reqStream {
+				g.streamEntity(Way{id, tags, nodes})
+			}
 		}
 		return nil
 	})
@@ -274,49 +306,55 @@ func (g *Gosmonaut) scanWays() error {
 
 func (g *Gosmonaut) scanRelations() error {
 	return g.scan(RelationType, func(v interface{}) error {
-		raw, ok := v.(rawRelation)
+		d, ok := v.(*relationParser)
 		if !ok {
-			return fmt.Errorf("Got invalid relation from decoder (%T)", v)
+			return fmt.Errorf("Got invalid relation parser (%T)", v)
 		}
 
-		// Needed by stream?
-		if !g.entityNeeded(RelationType, raw.Tags) {
-			return nil
-		}
+		for {
+			id, tags, ok := d.next()
+			if !ok {
+				break
+			}
 
-		// Build members
-		members := make([]Member, 0, len(raw.Members))
-		for _, rawm := range raw.Members {
-			var i OSMEntity
-			switch rawm.Type {
-			case WayType:
-				if w, ok := g.wayCache[rawm.ID]; ok && w != nil {
-					i = *w
-				} else {
-					g.printWarning(fmt.Sprintf("Way #%d in not in file for relation #%d", rawm.ID, raw.ID))
-					continue
-				}
-			case NodeType:
-				if n, ok := g.nodeCache[rawm.ID]; ok && n != nil {
-					i = *n
-				} else {
-					g.printWarning(fmt.Sprintf("Node #%d in not in file for relation #%d", rawm.ID, raw.ID))
-					continue
-				}
-			default:
-				// We don't support sub-relations yet
-				g.printWarning(fmt.Sprintf("Skipping sub-relation #%d in relation #%d (not supported)", rawm.ID, raw.ID))
+			// Needed by stream?
+			if !g.entityNeeded(RelationType, tags) {
 				continue
 			}
-			m := Member{rawm.Role, i}
-			members = append(members, m)
+
+			// Build members
+			ids := d.ids()
+			types := d.types()
+			roles := d.roles()
+			members := make([]Member, 0, len(ids))
+			for i, mid := range ids {
+				var e OSMEntity
+				switch types[i] {
+				case WayType:
+					if w, ok := g.wayCache[mid]; ok && w != nil {
+						e = *w
+					} else {
+						g.printWarning(fmt.Sprintf("Way #%d in not in file for relation #%d", mid, id))
+						continue
+					}
+				case NodeType:
+					if n, ok := g.nodeCache[mid]; ok && n != nil {
+						e = *n
+					} else {
+						g.printWarning(fmt.Sprintf("Node #%d in not in file for relation #%d", mid, id))
+						continue
+					}
+				default:
+					// We don't support sub-relations yet
+					g.printWarning(fmt.Sprintf("Skipping sub-relation #%d in relation #%d (not supported)", mid, id))
+					continue
+				}
+				members = append(members, Member{roles[i], e})
+			}
+
+			// Send to output stream
+			g.streamEntity(Relation{id, tags, members})
 		}
-
-		// Build relation
-		r := Relation{raw.ID, raw.Tags, members}
-
-		// Send to output stream
-		g.streamEntity(r)
 		return nil
 	})
 }
