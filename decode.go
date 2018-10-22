@@ -75,21 +75,21 @@ type entityParser interface {
 
 type nodeParser interface {
 	entityParser
-	next() (id int64, lat, lon float64, tags OSMTags, ok bool)
+	next() (id int64, lat, lon float64, tags OSMTags, err error)
 }
 
 type wayParser interface {
 	entityParser
-	next() (id int64, tags OSMTags, ok bool)
-	refs() []int64
+	next() (id int64, tags OSMTags, err error)
+	refs() ([]int64, error)
 }
 
 type relationParser interface {
 	entityParser
-	next() (id int64, tags OSMTags, ok bool)
-	ids() []int64
-	roles() []string
-	types() []OSMType
+	next() (id int64, tags OSMTags, err error)
+	ids() ([]int64, error)
+	roles() ([]string, error)
+	types() ([]OSMType, error)
 }
 
 // A Decoder reads and decodes OpenStreetMap PBF data from an input stream.

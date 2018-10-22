@@ -181,9 +181,11 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 		}
 
 		for {
-			_, tags, ok := d.next()
-			if !ok {
+			_, tags, err := d.next()
+			if err == io.EOF {
 				break
+			} else if err != nil {
+				return err
 			}
 
 			if !g.entityNeeded(RelationType, tags) {
@@ -191,8 +193,14 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 			}
 
 			// Add members to ID caches
-			ids := d.ids()
-			types := d.types()
+			ids, err := d.ids()
+			if err != nil {
+				return err
+			}
+			types, err := d.types()
+			if err != nil {
+				return err
+			}
 			for i, id := range ids {
 				switch types[i] {
 				case WayType:
@@ -215,14 +223,19 @@ func (g *Gosmonaut) scanWayDependencies() error {
 		}
 
 		for {
-			id, tags, ok := d.next()
-			if !ok {
+			id, tags, err := d.next()
+			if err == io.EOF {
 				break
+			} else if err != nil {
+				return err
 			}
 
-			if _, ok = g.wayCache[id]; ok || g.entityNeeded(WayType, tags) {
+			if _, ok := g.wayCache[id]; ok || g.entityNeeded(WayType, tags) {
 				// Add nodes to ID cache
-				refs := d.refs()
+				refs, err := d.refs()
+				if err != nil {
+					return err
+				}
 				for _, id := range refs {
 					g.nodeCache[id] = nil
 				}
@@ -240,9 +253,11 @@ func (g *Gosmonaut) scanNodes() error {
 		}
 
 		for {
-			id, lat, lon, tags, ok := d.next()
-			if !ok {
+			id, lat, lon, tags, err := d.next()
+			if err == io.EOF {
 				break
+			} else if err != nil {
+				return err
 			}
 
 			// Add to node cache
@@ -267,9 +282,11 @@ func (g *Gosmonaut) scanWays() error {
 		}
 
 		for {
-			id, tags, ok := d.next()
-			if !ok {
+			id, tags, err := d.next()
+			if err == io.EOF {
 				break
+			} else if err != nil {
+				return err
 			}
 
 			// Needed by cache or stream?
@@ -280,7 +297,10 @@ func (g *Gosmonaut) scanWays() error {
 			}
 
 			// Build nodes
-			refs := d.refs()
+			refs, err := d.refs()
+			if err != nil {
+				return err
+			}
 			nodes := make([]Node, len(refs))
 			for i, rid := range refs {
 				if n, ok := g.nodeCache[rid]; ok && n != nil {
@@ -312,9 +332,11 @@ func (g *Gosmonaut) scanRelations() error {
 		}
 
 		for {
-			id, tags, ok := d.next()
-			if !ok {
+			id, tags, err := d.next()
+			if err == io.EOF {
 				break
+			} else if err != nil {
+				return err
 			}
 
 			// Needed by stream?
@@ -323,9 +345,18 @@ func (g *Gosmonaut) scanRelations() error {
 			}
 
 			// Build members
-			ids := d.ids()
-			types := d.types()
-			roles := d.roles()
+			ids, err := d.ids()
+			if err != nil {
+				return err
+			}
+			types, err := d.types()
+			if err != nil {
+				return err
+			}
+			roles, err := d.roles()
+			if err != nil {
+				return err
+			}
 			members := make([]Member, 0, len(ids))
 			for i, mid := range ids {
 				var e OSMEntity
