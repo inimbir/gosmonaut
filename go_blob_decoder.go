@@ -2,19 +2,17 @@ package gosmonaut
 
 import (
 	"./OSMPBF"
-	"bytes"
-	"compress/zlib"
-	"errors"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 )
 
-// Decoder for Blob with OSMData (PrimitiveBlock)
-type dataDecoder struct {
+// goBlobDecoder uses the official Golang Protobuf package.
+// All protobuf messages will be unmarshalled to temporary objects before
+// processing.
+type goBlobDecoder struct {
 	q []entityParser
 }
 
-func (dec *dataDecoder) decode(blob *OSMPBF.Blob, t OSMType) ([]entityParser, OSMTypeSet, error) {
+func (dec *goBlobDecoder) decode(blob *OSMPBF.Blob, t OSMType) ([]entityParser, OSMTypeSet, error) {
 	data, err := getBlobData(blob)
 	if err != nil {
 		return nil, 0, err
@@ -37,7 +35,7 @@ func (dec *dataDecoder) decode(blob *OSMPBF.Blob, t OSMType) ([]entityParser, OS
 	return dec.q, types, nil
 }
 
-func (dec *dataDecoder) getTypes(pb *OSMPBF.PrimitiveBlock) (types OSMTypeSet) {
+func (dec *goBlobDecoder) getTypes(pb *OSMPBF.PrimitiveBlock) (types OSMTypeSet) {
 	for _, pg := range pb.GetPrimitivegroup() {
 		if len(pg.GetNodes()) > 0 || len(pg.GetDense().GetId()) > 0 {
 			types.Set(NodeType, true)
@@ -52,7 +50,7 @@ func (dec *dataDecoder) getTypes(pb *OSMPBF.PrimitiveBlock) (types OSMTypeSet) {
 	return
 }
 
-func (dec *dataDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock, t OSMType) {
+func (dec *goBlobDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock, t OSMType) {
 	for _, pg := range pb.GetPrimitivegroup() {
 		switch t {
 		case NodeType:
@@ -70,10 +68,6 @@ func (dec *dataDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock, t OSMType
 }
 
 /* Node Parsers */
-func decodeCoord(offset, granularity, coord int64) float64 {
-	return 1e-9 * float64((offset + (granularity * coord)))
-}
-
 type goNodeParser struct {
 	index                int
 	granularity          int64
@@ -263,28 +257,40 @@ func (d *goRelationParser) types() []OSMType {
 	return types
 }
 
-func getBlobData(blob *OSMPBF.Blob) ([]byte, error) {
-	switch {
-	case blob.Raw != nil:
-		return blob.GetRaw(), nil
-
-	case blob.ZlibData != nil:
-		r, err := zlib.NewReader(bytes.NewReader(blob.GetZlibData()))
-		if err != nil {
-			return nil, err
-		}
-		buf := bytes.NewBuffer(make([]byte, 0, blob.GetRawSize()+bytes.MinRead))
-		_, err = buf.ReadFrom(r)
-		if err != nil {
-			return nil, err
-		}
-		if buf.Len() != int(blob.GetRawSize()) {
-			err = fmt.Errorf("raw blob data size %d but expected %d", buf.Len(), blob.GetRawSize())
-			return nil, err
-		}
-		return buf.Bytes(), nil
-
-	default:
-		return nil, errors.New("unknown blob data")
+/* Tag Decoding */
+// Make tags map from stringtable and two parallel arrays of IDs.
+func extractTags(stringTable []string, keyIDs, valueIDs []uint32) OSMTags {
+	tags := NewOSMTags(len(keyIDs))
+	for index, keyID := range keyIDs {
+		key := stringTable[keyID]
+		val := stringTable[valueIDs[index]]
+		tags.Set(key, val)
 	}
+	return tags
+}
+
+type tagUnpacker struct {
+	stringTable []string
+	keysVals    []int32
+	index       int
+}
+
+// Make tags map from stringtable and array of IDs (used in DenseNodes encoding).
+func (tu *tagUnpacker) next() OSMTags {
+	var tags OSMTags
+	for tu.index < len(tu.keysVals) {
+		keyID := tu.keysVals[tu.index]
+		tu.index++
+		if keyID == 0 {
+			break
+		}
+
+		valID := tu.keysVals[tu.index]
+		tu.index++
+
+		key := tu.stringTable[keyID]
+		val := tu.stringTable[valID]
+		tags.Set(key, val)
+	}
+	return tags
 }

@@ -3,6 +3,7 @@ package gosmonaut
 import (
 	"./OSMPBF"
 	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -49,6 +50,7 @@ type Header struct {
 	OsmosisReplicationBaseURL        string
 }
 
+/* Used for decoding channels */
 type decodeInput struct {
 	blob *OSMPBF.Blob
 	pos  filePosition
@@ -158,7 +160,7 @@ func (dec *decoder) Start(t OSMType) error {
 			defer dec.wg.Done()
 
 			var bd blobDecoder
-			bd = new(dataDecoder)
+			bd = new(goBlobDecoder)
 
 			for i := range input {
 				if i.err == nil {
@@ -364,7 +366,7 @@ func (b *blobIndexer) readDataBlob() (blob *OSMPBF.Blob, pos filePosition, err e
 	return
 }
 
-/* Blob Decoder */
+/* Blob Finder */
 type blobFinder struct {
 	f   io.ReadSeeker
 	buf *bytes.Buffer
@@ -446,4 +448,35 @@ func (d *blobFinder) readBlob(blobHeader *OSMPBF.BlobHeader) (*OSMPBF.Blob, erro
 		return nil, err
 	}
 	return unmarshalBlob(d.buf)
+}
+
+/* Helpers */
+func getBlobData(blob *OSMPBF.Blob) ([]byte, error) {
+	switch {
+	case blob.Raw != nil:
+		return blob.GetRaw(), nil
+
+	case blob.ZlibData != nil:
+		r, err := zlib.NewReader(bytes.NewReader(blob.GetZlibData()))
+		if err != nil {
+			return nil, err
+		}
+		buf := bytes.NewBuffer(make([]byte, 0, blob.GetRawSize()+bytes.MinRead))
+		_, err = buf.ReadFrom(r)
+		if err != nil {
+			return nil, err
+		}
+		if buf.Len() != int(blob.GetRawSize()) {
+			err = fmt.Errorf("raw blob data size %d but expected %d", buf.Len(), blob.GetRawSize())
+			return nil, err
+		}
+		return buf.Bytes(), nil
+
+	default:
+		return nil, errors.New("unknown blob data")
+	}
+}
+
+func decodeCoord(offset, granularity, coord int64) float64 {
+	return 1e-9 * float64((offset + (granularity * coord)))
 }
