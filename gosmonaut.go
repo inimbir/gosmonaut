@@ -175,7 +175,7 @@ func (g *Gosmonaut) entityNeeded(t OSMType, tags OSMTags) bool {
 
 func (g *Gosmonaut) scanRelationDependencies() error {
 	return g.scan(RelationType, func(v interface{}) error {
-		d, ok := v.(*relationParser)
+		d, ok := v.(relationParser)
 		if !ok {
 			return fmt.Errorf("Got invalid relation parser (%T)", v)
 		}
@@ -209,7 +209,7 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 
 func (g *Gosmonaut) scanWayDependencies() error {
 	return g.scan(WayType, func(v interface{}) error {
-		d, ok := v.(*wayParser)
+		d, ok := v.(wayParser)
 		if !ok {
 			return fmt.Errorf("Got invalid way parser (%T)", v)
 		}
@@ -261,7 +261,7 @@ func (g *Gosmonaut) scanNodes() error {
 
 func (g *Gosmonaut) scanWays() error {
 	return g.scan(WayType, func(v interface{}) error {
-		d, ok := v.(*wayParser)
+		d, ok := v.(wayParser)
 		if !ok {
 			return fmt.Errorf("Got invalid way parser (%T)", v)
 		}
@@ -306,7 +306,7 @@ func (g *Gosmonaut) scanWays() error {
 
 func (g *Gosmonaut) scanRelations() error {
 	return g.scan(RelationType, func(v interface{}) error {
-		d, ok := v.(*relationParser)
+		d, ok := v.(relationParser)
 		if !ok {
 			return fmt.Errorf("Got invalid relation parser (%T)", v)
 		}
@@ -366,13 +366,13 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 
 	// Decode file
 	for {
-		if entities, err := g.dec.nextPair(); err == io.EOF {
+		if parsers, err := g.dec.nextPair(); err == io.EOF {
 			break
 		} else if err != nil {
 			return err
 		} else {
 			// Send to receiver
-			for _, v := range entities {
+			for _, v := range parsers {
 				if err := receiver(v); err != nil {
 					return err
 				}

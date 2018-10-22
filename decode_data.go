@@ -11,10 +11,10 @@ import (
 
 // Decoder for Blob with OSMData (PrimitiveBlock)
 type dataDecoder struct {
-	q []interface{}
+	q []entityParser
 }
 
-func (dec *dataDecoder) Decode(blob *OSMPBF.Blob, t OSMType) ([]interface{}, OSMTypeSet, error) {
+func (dec *dataDecoder) decode(blob *OSMPBF.Blob, t OSMType) ([]entityParser, OSMTypeSet, error) {
 	data, err := getBlobData(blob)
 	if err != nil {
 		return nil, 0, err
@@ -32,7 +32,7 @@ func (dec *dataDecoder) Decode(blob *OSMPBF.Blob, t OSMType) ([]interface{}, OSM
 	}
 
 	// Build entity parsers
-	dec.q = make([]interface{}, 0, len(primitiveBlock.GetPrimitivegroup()))
+	dec.q = make([]entityParser, 0, len(primitiveBlock.GetPrimitivegroup()))
 	dec.parsePrimitiveBlock(primitiveBlock, t)
 	return dec.q, types, nil
 }
@@ -57,28 +57,24 @@ func (dec *dataDecoder) parsePrimitiveBlock(pb *OSMPBF.PrimitiveBlock, t OSMType
 		switch t {
 		case NodeType:
 			if len(pg.GetNodes()) > 0 {
-				dec.q = append(dec.q, newSingleNodeParser(pb, pg.GetNodes()))
+				dec.q = append(dec.q, newGoNodeParser(pb, pg.GetNodes()))
 			} else if len(pg.GetDense().GetId()) > 0 {
-				dec.q = append(dec.q, newDenseNodesParser(pb, pg.GetDense()))
+				dec.q = append(dec.q, newGoDenseNodesParser(pb, pg.GetDense()))
 			}
 		case WayType:
-			dec.q = append(dec.q, newWayParser(pb, pg.GetWays()))
+			dec.q = append(dec.q, newGoWayParser(pb, pg.GetWays()))
 		case RelationType:
-			dec.q = append(dec.q, newRelationParser(pb, pg.GetRelations()))
+			dec.q = append(dec.q, newGoRelationParser(pb, pg.GetRelations()))
 		}
 	}
 }
 
 /* Node Parsers */
-type nodeParser interface {
-	next() (id int64, lat, lon float64, tags OSMTags, ok bool)
-}
-
 func decodeCoord(offset, granularity, coord int64) float64 {
 	return 1e-9 * float64((offset + (granularity * coord)))
 }
 
-type singleNodeParser struct {
+type goNodeParser struct {
 	index                int
 	granularity          int64
 	latOffset, lonOffset int64
@@ -86,8 +82,8 @@ type singleNodeParser struct {
 	nodes                []*OSMPBF.Node
 }
 
-func newSingleNodeParser(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.Node) *singleNodeParser {
-	return &singleNodeParser{
+func newGoNodeParser(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.Node) *goNodeParser {
+	return &goNodeParser{
 		granularity: int64(pb.GetGranularity()),
 		latOffset:   pb.GetLatOffset(),
 		lonOffset:   pb.GetLonOffset(),
@@ -96,7 +92,9 @@ func newSingleNodeParser(pb *OSMPBF.PrimitiveBlock, nodes []*OSMPBF.Node) *singl
 	}
 }
 
-func (d *singleNodeParser) next() (id int64, lat, lon float64, tags OSMTags, ok bool) {
+func (d *goNodeParser) isEntityParser() {}
+
+func (d *goNodeParser) next() (id int64, lat, lon float64, tags OSMTags, ok bool) {
 	if d.index >= len(d.nodes) {
 		return
 	}
@@ -112,7 +110,7 @@ func (d *singleNodeParser) next() (id int64, lat, lon float64, tags OSMTags, ok 
 	return
 }
 
-type denseNodesParser struct {
+type goDenseNodesParser struct {
 	index                int
 	id, lat, lon         int64
 	ids                  []int64
@@ -122,9 +120,9 @@ type denseNodesParser struct {
 	tu                   *tagUnpacker
 }
 
-func newDenseNodesParser(pb *OSMPBF.PrimitiveBlock, dn *OSMPBF.DenseNodes) *denseNodesParser {
+func newGoDenseNodesParser(pb *OSMPBF.PrimitiveBlock, dn *OSMPBF.DenseNodes) *goDenseNodesParser {
 	st := pb.GetStringtable().GetS()
-	return &denseNodesParser{
+	return &goDenseNodesParser{
 		granularity: int64(pb.GetGranularity()),
 		latOffset:   pb.GetLatOffset(),
 		lonOffset:   pb.GetLonOffset(),
@@ -135,7 +133,9 @@ func newDenseNodesParser(pb *OSMPBF.PrimitiveBlock, dn *OSMPBF.DenseNodes) *dens
 	}
 }
 
-func (d *denseNodesParser) next() (id int64, lat, lon float64, tags OSMTags, ok bool) {
+func (d *goDenseNodesParser) isEntityParser() {}
+
+func (d *goDenseNodesParser) next() (id int64, lat, lon float64, tags OSMTags, ok bool) {
 	if d.index >= len(d.ids) {
 		return
 	}
@@ -155,20 +155,22 @@ func (d *denseNodesParser) next() (id int64, lat, lon float64, tags OSMTags, ok 
 }
 
 /* Way Parser */
-type wayParser struct {
+type goWayParser struct {
 	index int
 	st    []string
 	ways  []*OSMPBF.Way
 }
 
-func newWayParser(pb *OSMPBF.PrimitiveBlock, ways []*OSMPBF.Way) *wayParser {
-	return &wayParser{
+func newGoWayParser(pb *OSMPBF.PrimitiveBlock, ways []*OSMPBF.Way) *goWayParser {
+	return &goWayParser{
 		st:   pb.GetStringtable().GetS(),
 		ways: ways,
 	}
 }
 
-func (d *wayParser) next() (id int64, tags OSMTags, ok bool) {
+func (d *goWayParser) isEntityParser() {}
+
+func (d *goWayParser) next() (id int64, tags OSMTags, ok bool) {
 	if d.index >= len(d.ways) {
 		return
 	}
@@ -182,7 +184,7 @@ func (d *wayParser) next() (id int64, tags OSMTags, ok bool) {
 	return
 }
 
-func (d *wayParser) refs() []int64 {
+func (d *goWayParser) refs() []int64 {
 	protoIDs := d.ways[d.index-1].GetRefs()
 	ids := make([]int64, len(protoIDs))
 	var id int64
@@ -194,20 +196,22 @@ func (d *wayParser) refs() []int64 {
 }
 
 /* Relation Parser */
-type relationParser struct {
+type goRelationParser struct {
 	index     int
 	st        []string
 	relations []*OSMPBF.Relation
 }
 
-func newRelationParser(pb *OSMPBF.PrimitiveBlock, relations []*OSMPBF.Relation) *relationParser {
-	return &relationParser{
+func newGoRelationParser(pb *OSMPBF.PrimitiveBlock, relations []*OSMPBF.Relation) *goRelationParser {
+	return &goRelationParser{
 		st:        pb.GetStringtable().GetS(),
 		relations: relations,
 	}
 }
 
-func (d *relationParser) next() (id int64, tags OSMTags, ok bool) {
+func (d *goRelationParser) isEntityParser() {}
+
+func (d *goRelationParser) next() (id int64, tags OSMTags, ok bool) {
 	if d.index >= len(d.relations) {
 		return
 	}
@@ -221,7 +225,7 @@ func (d *relationParser) next() (id int64, tags OSMTags, ok bool) {
 	return
 }
 
-func (d *relationParser) ids() []int64 {
+func (d *goRelationParser) ids() []int64 {
 	protoIDs := d.relations[d.index-1].GetMemids()
 	ids := make([]int64, len(protoIDs))
 	var id int64
@@ -232,7 +236,7 @@ func (d *relationParser) ids() []int64 {
 	return ids
 }
 
-func (d *relationParser) roles() []string {
+func (d *goRelationParser) roles() []string {
 	protoRoles := d.relations[d.index-1].GetRolesSid()
 	roles := make([]string, len(protoRoles))
 	for i, protoRole := range protoRoles {
@@ -241,7 +245,7 @@ func (d *relationParser) roles() []string {
 	return roles
 }
 
-func (d *relationParser) types() []OSMType {
+func (d *goRelationParser) types() []OSMType {
 	protoTypes := d.relations[d.index-1].GetTypes()
 	types := make([]OSMType, len(protoTypes))
 	for i, protoT := range protoTypes {

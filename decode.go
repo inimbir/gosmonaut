@@ -56,10 +56,38 @@ type decodeInput struct {
 }
 
 type decodeOutput struct {
-	entities []interface{}
-	types    OSMTypeSet
-	pos      filePosition
-	err      error
+	parsers []entityParser
+	types   OSMTypeSet
+	pos     filePosition
+	err     error
+}
+
+/* Blob Decoder Interfaces */
+type blobDecoder interface {
+	decode(*OSMPBF.Blob, OSMType) ([]entityParser, OSMTypeSet, error)
+}
+
+type entityParser interface {
+	isEntityParser()
+}
+
+type nodeParser interface {
+	entityParser
+	next() (id int64, lat, lon float64, tags OSMTags, ok bool)
+}
+
+type wayParser interface {
+	entityParser
+	next() (id int64, tags OSMTags, ok bool)
+	refs() []int64
+}
+
+type relationParser interface {
+	entityParser
+	next() (id int64, tags OSMTags, ok bool)
+	ids() []int64
+	roles() []string
+	types() []OSMType
 }
 
 // A Decoder reads and decodes OpenStreetMap PBF data from an input stream.
@@ -128,16 +156,19 @@ func (dec *decoder) Start(t OSMType) error {
 		output := make(chan decodeOutput)
 		go func() {
 			defer dec.wg.Done()
-			dd := new(dataDecoder)
+
+			var bd blobDecoder
+			bd = new(dataDecoder)
+
 			for i := range input {
 				if i.err == nil {
 					// Decode objects and send to ouput
-					entities, types, err := dd.Decode(i.blob, t)
+					parsers, types, err := bd.decode(i.blob, t)
 					output <- decodeOutput{
-						entities: entities,
-						types:    types,
-						pos:      i.pos,
-						err:      err,
+						parsers: parsers,
+						types:   types,
+						pos:     i.pos,
+						err:     err,
 					}
 				} else {
 					// Send input error as is
@@ -200,7 +231,7 @@ func (dec *decoder) Start(t OSMType) error {
 	return nil
 }
 
-func (dec *decoder) nextPair() ([]interface{}, error) {
+func (dec *decoder) nextPair() ([]entityParser, error) {
 	// Select output channel
 	output := dec.outputs[dec.outputIndex]
 	dec.outputIndex = (dec.outputIndex + 1) % dec.nProcs
@@ -223,7 +254,7 @@ func (dec *decoder) nextPair() ([]interface{}, error) {
 			dec.relationIndexer.index(o.pos)
 		}
 	}
-	return o.entities, o.err
+	return o.parsers, o.err
 }
 
 func decodeOSMHeader(blob *OSMPBF.Blob) (*Header, error) {
