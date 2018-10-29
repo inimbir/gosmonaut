@@ -1,6 +1,7 @@
 package gosmonaut
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -205,6 +206,9 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 			if err != nil {
 				return err
 			}
+			if len(ids) != len(types) {
+				return errors.New("Length of relation ids and types differs")
+			}
 			for i, id := range ids {
 				switch types[i] {
 				case WayType:
@@ -360,6 +364,9 @@ func (g *Gosmonaut) scanRelations() error {
 			roles, err := d.roles()
 			if err != nil {
 				return err
+			}
+			if len(ids) != len(types) || len(ids) != len(roles) {
+				return errors.New("Length of relation ids, roles and types differs")
 			}
 			members := make([]Member, 0, len(ids))
 			for i, mid := range ids {

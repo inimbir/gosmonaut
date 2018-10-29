@@ -234,10 +234,6 @@ func (d *goRelationParser) next() (id int64, tags OSMTags, err error) {
 	}
 
 	rel := d.relations[d.index]
-	if len(rel.GetMemids()) != len(rel.GetRolesSid()) ||
-		len(rel.GetMemids()) != len(rel.GetTypes()) {
-		err = errors.New("Length of relation ids, roles and types differs")
-	}
 	id = rel.GetId()
 	tags, err = extractTags(d.st, rel.GetKeys(), rel.GetVals())
 	d.relation = rel
