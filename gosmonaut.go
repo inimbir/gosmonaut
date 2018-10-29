@@ -42,6 +42,9 @@ type Gosmonaut struct {
 	// Set the number of processes that are used for decoding.
 	// If not set the amount of available logical CPUs will be used.
 	NumProcessors int
+
+	// Decoder sets the PBF blob decoder.
+	Decoder DecoderType
 }
 
 // NewGosmonaut creates a new Gosmonaut instance.
@@ -60,6 +63,7 @@ func NewGosmonaut(
 		funcEntityNeeded: funcEntityNeeded,
 		nodeCache:        map[int64]*Node{},
 		wayCache:         map[int64]*Way{},
+		Decoder:          FastDecoder,
 	}
 }
 
@@ -94,7 +98,7 @@ func (g *Gosmonaut) Start() {
 		}
 
 		// Create decoder
-		g.dec = newDecoder(f, nProcs)
+		g.dec = newDecoder(f, nProcs, g.Decoder)
 
 		// Scan relation dependencies
 		if g.types.Get(RelationType) {

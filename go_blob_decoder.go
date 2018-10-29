@@ -111,7 +111,7 @@ func (d *goNodeParser) next() (id int64, lat, lon float64, tags OSMTags, err err
 	id = node.GetId()
 	lat = decodeCoord(d.latOffset, d.granularity, node.GetLat())
 	lon = decodeCoord(d.latOffset, d.granularity, node.GetLon())
-	tags, err = d.st.extractTags(node.GetKeys(), node.GetVals())
+	tags, err = extractTags(d.st, node.GetKeys(), node.GetVals())
 
 	d.index++
 	return
@@ -192,7 +192,7 @@ func (d *goWayParser) next() (id int64, tags OSMTags, err error) {
 
 	way := d.ways[d.index]
 	id = way.GetId()
-	tags, err = d.st.extractTags(way.GetKeys(), way.GetVals())
+	tags, err = extractTags(d.st, way.GetKeys(), way.GetVals())
 	d.way = way
 
 	d.index++
@@ -239,7 +239,7 @@ func (d *goRelationParser) next() (id int64, tags OSMTags, err error) {
 		err = errors.New("Length of relation ids, roles and types differs")
 	}
 	id = rel.GetId()
-	tags, err = d.st.extractTags(rel.GetKeys(), rel.GetVals())
+	tags, err = extractTags(d.st, rel.GetKeys(), rel.GetVals())
 	d.relation = rel
 
 	d.index++
@@ -289,28 +289,15 @@ func (d *goRelationParser) types() ([]OSMType, error) {
 }
 
 /* Tag Decoding */
-type stringTable []string
-
-func (st stringTable) get(i int) (string, error) {
-	if i >= len(st) {
-		return "", errors.New("String table index out of bounds")
-	}
-	return st[i], nil
-}
-
 // Make tags from stringtable and two parallel arrays of IDs.
-func (st stringTable) extractTags(keyIDs, valueIDs []uint32) (OSMTags, error) {
+func extractTags(st stringTable, keyIDs, valueIDs []uint32) (OSMTags, error) {
 	if len(keyIDs) != len(valueIDs) {
 		return nil, errors.New("Length of tag key and value arrays differs")
 	}
 
 	tags := NewOSMTags(len(keyIDs))
 	for index, keyID := range keyIDs {
-		key, err := st.get(int(keyID))
-		if err != nil {
-			return nil, err
-		}
-		val, err := st.get(int(valueIDs[index]))
+		key, val, err := st.extractTag(int(keyID), int(valueIDs[index]))
 		if err != nil {
 			return nil, err
 		}

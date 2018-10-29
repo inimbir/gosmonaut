@@ -13,6 +13,23 @@ import (
 	"time"
 )
 
+// DecoderType represents the decoder that is used for parsing PBF blob data.
+type DecoderType int
+
+const (
+	// GoDecoder uses the official Golang Protobuf package. All protobuf
+	// messages will be unmarshalled to temporary objects before processing.
+	GoDecoder DecoderType = iota
+
+	// FastDecoder is a custom implementation of the protobuf format. It is
+	// optimized for decoding of PBF files. Rather than unmarshalling it streams
+	// the entities and thus reduces GC overhead. The fast blob decoder lacks
+	// support of some protobuf features which include groups and unpacked
+	// varint arrays. It is supposed to fail when it encounteres a feature it
+	// doesn't support.
+	FastDecoder
+)
+
 const (
 	maxBlobHeaderSize = 64 * 1024
 
@@ -94,9 +111,10 @@ type relationParser interface {
 
 // A Decoder reads and decodes OpenStreetMap PBF data from an input stream.
 type decoder struct {
-	nProcs int
-	nRun   int
-	wg     sync.WaitGroup
+	nProcs      int
+	nRun        int
+	wg          sync.WaitGroup
+	decoderType DecoderType
 
 	// Store header block
 	header *Header
@@ -112,7 +130,7 @@ type decoder struct {
 }
 
 // newDecoder returns a new decoder that reads from r.
-func newDecoder(f io.ReadSeeker, n int) *decoder {
+func newDecoder(f io.ReadSeeker, n int, decoderType DecoderType) *decoder {
 	if n < 1 {
 		n = 1
 	}
@@ -124,6 +142,7 @@ func newDecoder(f io.ReadSeeker, n int) *decoder {
 		nodeIndexer:     newBlobIndexer(f, buf),
 		wayIndexer:      newBlobIndexer(f, buf),
 		relationIndexer: newBlobIndexer(f, buf),
+		decoderType:     decoderType,
 	}
 }
 
@@ -160,7 +179,12 @@ func (dec *decoder) Start(t OSMType) error {
 			defer dec.wg.Done()
 
 			var bd blobDecoder
-			bd = new(goBlobDecoder)
+			switch dec.decoderType {
+			case GoDecoder:
+				bd = new(goBlobDecoder)
+			case FastDecoder:
+				bd = newFastBlobDecoder()
+			}
 
 			for i := range input {
 				if i.err == nil {
@@ -448,6 +472,26 @@ func (d *blobFinder) readBlob(blobHeader *OSMPBF.BlobHeader) (*OSMPBF.Blob, erro
 		return nil, err
 	}
 	return unmarshalBlob(d.buf)
+}
+
+/* String Table */
+type stringTable []string
+
+func (st stringTable) get(i int) (string, error) {
+	if i >= len(st) {
+		return "", errors.New("String table index out of bounds")
+	}
+	return st[i], nil
+}
+
+func (st stringTable) extractTag(keyID, valueID int) (key, val string, err error) {
+	if key, err = st.get(keyID); err != nil {
+		return
+	}
+	if val, err = st.get(valueID); err != nil {
+		return
+	}
+	return
 }
 
 /* Helpers */

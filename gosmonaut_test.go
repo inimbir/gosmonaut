@@ -22,16 +22,24 @@ const (
 	LondonNonDense = "greater-london-140324-nondense.osm.pbf"
 )
 
-func TestGosmonaut(t *testing.T) {
-	testGosmonautWithFile(t, London)
+func TestGoDecoder(t *testing.T) {
+	testGosmonautWithFile(t, London, GoDecoder)
 }
 
-func TestGosmonautNonDense(t *testing.T) {
-	testGosmonautWithFile(t, LondonNonDense)
+func TestGoDecoderNonDense(t *testing.T) {
+	testGosmonautWithFile(t, LondonNonDense, GoDecoder)
+}
+
+func TestFastDecoder(t *testing.T) {
+	testGosmonautWithFile(t, London, FastDecoder)
+}
+
+func TestFastDecoderNonDense(t *testing.T) {
+	testGosmonautWithFile(t, LondonNonDense, FastDecoder)
 }
 
 // Test results have been verified by Osmonaut v1.1
-func testGosmonautWithFile(t *testing.T, filename string) {
+func testGosmonautWithFile(t *testing.T, filename string, decoder DecoderType) {
 	if testing.Short() {
 		t.Skip("Skipping decoding tests in short mode")
 	}
@@ -44,6 +52,7 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 		func(t OSMType, tags OSMTags) bool {
 			return tags.Has("addr:housenumber")
 		},
+		decoder,
 		428593, 63528, 97,
 		loadTestdata(t, "addr_node.json"),
 		loadTestdata(t, "addr_way.json"),
@@ -56,6 +65,7 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 		func(t OSMType, tags OSMTags) bool {
 			return tags.HasValue("type", "restriction")
 		},
+		decoder,
 		18143, 3181, 1517,
 		"",
 		"",
@@ -67,6 +77,7 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 		func(t OSMType, tags OSMTags) bool {
 			return true
 		},
+		decoder,
 		0, 0, 0,
 		"", "", "",
 	)
@@ -76,6 +87,7 @@ func testGosmonautWithFile(t *testing.T, filename string) {
 		func(t OSMType, tags OSMTags) bool {
 			return false
 		},
+		decoder,
 		0, 0, 0,
 		"", "", "",
 	)
@@ -86,10 +98,12 @@ func testGosmonaut(
 	filename string,
 	types OSMTypeSet,
 	f func(OSMType, OSMTags) bool,
+	decoder DecoderType,
 	nc, wc, rc int, // Number of total entities per type
 	ns, ws, rs string, // JSON string of the first entity per type
 ) {
 	g := NewGosmonaut(filepath.Join("testdata", filename), types, f)
+	g.Decoder = decoder
 	g.Start()
 	var nh, wh, rh bool
 	var rnc, rwc, rrc int
