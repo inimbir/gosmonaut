@@ -380,8 +380,7 @@ func (b *blobIndexer) readDataBlob() (blob *OSMPBF.Blob, pos filePosition, err e
 	// Read blob
 	b.f.Seek(pos.offset, io.SeekStart)
 	b.buf.Reset()
-	_, err = io.CopyN(b.buf, b.f, pos.size)
-	if err != nil {
+	if _, err = io.CopyN(b.buf, b.f, pos.size); err != nil {
 		return
 	}
 
@@ -397,6 +396,7 @@ type blobFinder struct {
 }
 
 func (d *blobFinder) readHeaderBlob() (*OSMPBF.Blob, error) {
+	d.f.Seek(0, io.SeekStart)
 	blob, _, err := d.readFileBlock("OSMHeader")
 	return blob, err
 }

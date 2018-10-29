@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"runtime"
 	"time"
 )
@@ -22,7 +21,7 @@ type Gosmonaut struct {
 	stream chan osmPair
 
 	// Defined by caller
-	filename         string
+	file             io.ReadSeeker
 	types            OSMTypeSet
 	funcEntityNeeded func(OSMType, OSMTags) bool
 
@@ -53,13 +52,13 @@ type Gosmonaut struct {
 // funcEntityNeeded will be called to determine if the caller needs a specific
 // OSM entity.
 func NewGosmonaut(
-	filename string,
+	file io.ReadSeeker,
 	types OSMTypeSet,
 	funcEntityNeeded func(OSMType, OSMTags) bool,
 ) *Gosmonaut {
 	return &Gosmonaut{
 		stream:           make(chan osmPair, entitiesPerPrimitiveBlock),
-		filename:         filename,
+		file:             file,
 		types:            types,
 		funcEntityNeeded: funcEntityNeeded,
 		nodeCache:        map[int64]*Node{},
@@ -82,14 +81,6 @@ func (g *Gosmonaut) Start() {
 
 		defer close(g.stream)
 
-		// Open file
-		f, err := os.Open(g.filename)
-		if err != nil {
-			g.streamError(err)
-			return
-		}
-		defer f.Close()
-
 		// Determine number of processes
 		var nProcs int
 		if g.NumProcessors != 0 {
@@ -99,7 +90,7 @@ func (g *Gosmonaut) Start() {
 		}
 
 		// Create decoder
-		g.dec = newDecoder(f, nProcs, g.Decoder)
+		g.dec = newDecoder(g.file, nProcs, g.Decoder)
 
 		// Scan relation dependencies
 		if g.types.Get(RelationType) {

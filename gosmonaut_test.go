@@ -102,7 +102,14 @@ func testGosmonaut(
 	nc, wc, rc int, // Number of total entities per type
 	ns, ws, rs string, // JSON string of the first entity per type
 ) {
-	g := NewGosmonaut(filepath.Join("testdata", filename), types, f)
+	// Open file
+	file, err := os.Open(filepath.Join("testdata", filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	g := NewGosmonaut(file, types, f)
 	g.Decoder = decoder
 	g.Start()
 	var nh, wh, rh bool
