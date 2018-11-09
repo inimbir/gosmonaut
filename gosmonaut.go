@@ -25,6 +25,9 @@ type Gosmonaut struct {
 	types            OSMTypeSet
 	funcEntityNeeded func(OSMType, OSMTags) bool
 
+	// ID trackers
+	nodeIDTracker, wayIDTracker idTracker
+
 	// Entitiy caches
 	nodeCache map[int64]*Node
 	wayCache  map[int64]*Way
@@ -61,9 +64,9 @@ func NewGosmonaut(
 		file:             file,
 		types:            types,
 		funcEntityNeeded: funcEntityNeeded,
-		nodeCache:        map[int64]*Node{},
-		wayCache:         map[int64]*Way{},
-		Decoder:          FastDecoder,
+		nodeIDTracker: newBitsetIDTracker(),
+		wayIDTracker:  newBitsetIDTracker(),
+		Decoder:       FastDecoder,
 	}
 }
 
@@ -98,20 +101,21 @@ func (g *Gosmonaut) Start() {
 				g.streamError(err)
 				return
 			}
-			g.printDebugInfo(fmt.Sprintf("Scanned relation dependencies [length: %d]", len(g.wayCache)))
+			g.printDebugInfo(fmt.Sprintf("Scanned relation dependencies [length: %d]", g.wayIDTracker.len()))
 		}
 
 		// Scan way dependencies
-		if g.types.Get(WayType) || len(g.wayCache) != 0 {
+		if g.types.Get(WayType) || g.wayIDTracker.len() != 0 {
 			if err := g.scanWayDependencies(); err != nil {
 				g.streamError(err)
 				return
 			}
-			g.printDebugInfo(fmt.Sprintf("Scanned way dependencies [length: %d]", len(g.nodeCache)))
+			g.printDebugInfo(fmt.Sprintf("Scanned way dependencies [length: %d]", g.nodeIDTracker.len()))
 		}
 
 		// Scan nodes
-		if g.types.Get(NodeType) || len(g.nodeCache) != 0 {
+		g.nodeCache = make(map[int64]*Node, g.nodeIDTracker.len())
+		if g.types.Get(NodeType) || g.nodeIDTracker.len() != 0 {
 			if err := g.scanNodes(); err != nil {
 				g.streamError(err)
 				return
@@ -119,14 +123,21 @@ func (g *Gosmonaut) Start() {
 			g.printDebugInfo("Scanned nodes")
 		}
 
+		g.nodeIDTracker = nil
+		g.printDebugInfo("Deleted node ID tracker")
+
 		// Scan ways
-		if g.types.Get(WayType) || len(g.wayCache) != 0 {
+		g.wayCache = make(map[int64]*Way, g.wayIDTracker.len())
+		if g.types.Get(WayType) || g.wayIDTracker.len() != 0 {
 			if err := g.scanWays(); err != nil {
 				g.streamError(err)
 				return
 			}
 			g.printDebugInfo("Scanned ways")
 		}
+
+		g.wayIDTracker = nil
+		g.printDebugInfo("Deleted way ID tracker")
 
 		// Scan relations
 		if g.types.Get(RelationType) {
@@ -203,9 +214,9 @@ func (g *Gosmonaut) scanRelationDependencies() error {
 			for i, id := range ids {
 				switch types[i] {
 				case WayType:
-					g.wayCache[id] = nil
+					g.wayIDTracker.set(id)
 				case NodeType:
-					g.nodeCache[id] = nil
+					g.nodeIDTracker.set(id)
 					// We don't support sub-relations yet
 				}
 			}
@@ -229,14 +240,14 @@ func (g *Gosmonaut) scanWayDependencies() error {
 				return err
 			}
 
-			if _, ok := g.wayCache[id]; ok || g.entityNeeded(WayType, tags) {
+			if g.wayIDTracker.get(id) || g.entityNeeded(WayType, tags) {
 				// Add nodes to ID cache
 				refs, err := d.refs()
 				if err != nil {
 					return err
 				}
 				for _, id := range refs {
-					g.nodeCache[id] = nil
+					g.nodeIDTracker.set(id)
 				}
 			}
 		}
@@ -260,7 +271,7 @@ func (g *Gosmonaut) scanNodes() error {
 			}
 
 			// Add to node cache
-			if _, ok := g.nodeCache[id]; ok {
+			if g.nodeIDTracker.get(id) {
 				g.nodeCache[id] = &Node{id, lat, lon, tags}
 			}
 
@@ -289,7 +300,7 @@ func (g *Gosmonaut) scanWays() error {
 			}
 
 			// Needed by cache or stream?
-			_, reqCache := g.wayCache[id]
+			reqCache := g.wayIDTracker.get(id)
 			reqStream := g.entityNeeded(WayType, tags)
 			if !reqCache && !reqStream {
 				continue
@@ -302,7 +313,7 @@ func (g *Gosmonaut) scanWays() error {
 			}
 			nodes := make([]Node, len(refs))
 			for i, rid := range refs {
-				if n, ok := g.nodeCache[rid]; ok && n != nil {
+				if n, ok := g.nodeCache[rid]; ok {
 					nodes[i] = *n
 				} else {
 					return fmt.Errorf("Node #%d in not in file for way #%d", rid, id)
@@ -364,14 +375,14 @@ func (g *Gosmonaut) scanRelations() error {
 				var e OSMEntity
 				switch types[i] {
 				case WayType:
-					if w, ok := g.wayCache[mid]; ok && w != nil {
+					if w, ok := g.wayCache[mid]; ok {
 						e = *w
 					} else {
 						g.printWarning(fmt.Sprintf("Way #%d in not in file for relation #%d", mid, id))
 						continue
 					}
 				case NodeType:
-					if n, ok := g.nodeCache[mid]; ok && n != nil {
+					if n, ok := g.nodeCache[mid]; ok {
 						e = *n
 					} else {
 						g.printWarning(fmt.Sprintf("Node #%d in not in file for relation #%d", mid, id))
