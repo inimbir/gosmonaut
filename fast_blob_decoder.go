@@ -110,6 +110,7 @@ func (dec *fastBlobDecoder) decode(blob *OSMPBF.Blob, t OSMType) ([]entityParser
 	}
 
 	// Decode primitive groups
+	dec.q = nil
 	var st stringTable
 	for _, buf := range pgBufs {
 		if err := dec.decodePrimitiveGroup(buf, &st, t); err != nil {
@@ -136,6 +137,7 @@ func (dec *fastBlobDecoder) decodePrimitiveGroup(buf []byte, st *stringTable, t 
 		return err
 	}
 	if m.wire == proto.WireBytes {
+		var parser entityParser
 		switch m.tag {
 		case protoPGDenseNodes:
 			if t == NodeType {
@@ -145,7 +147,7 @@ func (dec *fastBlobDecoder) decodePrimitiveGroup(buf []byte, st *stringTable, t 
 					st, m.buf,
 					dec.granularity, dec.latOffset, dec.lonOffset,
 				); err == nil {
-					dec.q = append(dec.q, d)
+					parser = d
 				} else {
 					return err
 				}
@@ -153,23 +155,25 @@ func (dec *fastBlobDecoder) decodePrimitiveGroup(buf []byte, st *stringTable, t 
 			dec.types.Set(NodeType, true)
 		case protoPGNode:
 			if t == NodeType {
-				d := newFastNodeParser(
+				parser = newFastNodeParser(
 					st, buf,
 					dec.granularity, dec.latOffset, dec.lonOffset,
 				)
-				dec.q = append(dec.q, d)
 			}
 			dec.types.Set(NodeType, true)
 		case protoPGWay:
 			if t == WayType {
-				dec.q = append(dec.q, newFastWayParser(st, buf))
+				parser = newFastWayParser(st, buf)
 			}
 			dec.types.Set(WayType, true)
 		case protoPGRelation:
 			if t == RelationType {
-				dec.q = append(dec.q, newFastRelationParser(st, buf))
+				parser = newFastRelationParser(st, buf)
 			}
 			dec.types.Set(RelationType, true)
+		}
+		if parser != nil {
+			dec.q = append(dec.q, parser)
 		}
 	}
 	return nil
