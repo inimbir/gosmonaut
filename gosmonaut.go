@@ -29,8 +29,8 @@ type Gosmonaut struct {
 	nodeIDTracker, wayIDTracker idTracker
 
 	// Entitiy caches
-	nodeCache map[int64]*Node
-	wayCache  map[int64]*Way
+	nodeCache *binaryNodeEntityMap
+	wayCache  *binaryWayEntityMap
 
 	// For debug mode
 	timeStarted time.Time
@@ -64,9 +64,9 @@ func NewGosmonaut(
 		file:             file,
 		types:            types,
 		funcEntityNeeded: funcEntityNeeded,
-		nodeIDTracker: newBitsetIDTracker(),
-		wayIDTracker:  newBitsetIDTracker(),
-		Decoder:       FastDecoder,
+		nodeIDTracker:    newBitsetIDTracker(),
+		wayIDTracker:     newBitsetIDTracker(),
+		Decoder:          FastDecoder,
 	}
 }
 
@@ -113,8 +113,10 @@ func (g *Gosmonaut) Start() {
 			g.printDebugInfo(fmt.Sprintf("Scanned way dependencies [length: %d]", g.nodeIDTracker.len()))
 		}
 
+		g.nodeCache = newBinaryNodeEntityMap(g.nodeIDTracker.len())
+		g.printDebugInfo("Created node cache")
+
 		// Scan nodes
-		g.nodeCache = make(map[int64]*Node, g.nodeIDTracker.len())
 		if g.types.Get(NodeType) || g.nodeIDTracker.len() != 0 {
 			if err := g.scanNodes(); err != nil {
 				g.streamError(err)
@@ -126,8 +128,13 @@ func (g *Gosmonaut) Start() {
 		g.nodeIDTracker = nil
 		g.printDebugInfo("Deleted node ID tracker")
 
+		g.nodeCache.prepare()
+		g.printDebugInfo("Prepared node cache")
+
+		g.wayCache = newBinaryWayEntityMap(g.wayIDTracker.len())
+		g.printDebugInfo("Created way cache")
+
 		// Scan ways
-		g.wayCache = make(map[int64]*Way, g.wayIDTracker.len())
 		if g.types.Get(WayType) || g.wayIDTracker.len() != 0 {
 			if err := g.scanWays(); err != nil {
 				g.streamError(err)
@@ -138,6 +145,9 @@ func (g *Gosmonaut) Start() {
 
 		g.wayIDTracker = nil
 		g.printDebugInfo("Deleted way ID tracker")
+
+		g.wayCache.prepare()
+		g.printDebugInfo("Prepared way cache")
 
 		// Scan relations
 		if g.types.Get(RelationType) {
@@ -269,15 +279,16 @@ func (g *Gosmonaut) scanNodes() error {
 			} else if err != nil {
 				return err
 			}
+			n := Node{id, lat, lon, tags}
 
 			// Add to node cache
 			if g.nodeIDTracker.get(id) {
-				g.nodeCache[id] = &Node{id, lat, lon, tags}
+				g.nodeCache.add(n)
 			}
 
 			// Send to output stream
 			if g.entityNeeded(NodeType, tags) {
-				g.streamEntity(Node{id, lat, lon, tags})
+				g.streamEntity(n)
 			}
 		}
 		return nil
@@ -313,21 +324,22 @@ func (g *Gosmonaut) scanWays() error {
 			}
 			nodes := make([]Node, len(refs))
 			for i, rid := range refs {
-				if n, ok := g.nodeCache[rid]; ok {
-					nodes[i] = *n
+				if n, ok := g.nodeCache.get(rid); ok {
+					nodes[i] = n
 				} else {
 					return fmt.Errorf("Node #%d in not in file for way #%d", rid, id)
 				}
 			}
+			w := Way{id, tags, nodes}
 
 			// Add to way cache
 			if reqCache {
-				g.wayCache[id] = &Way{id, tags, nodes}
+				g.wayCache.add(w)
 			}
 
 			// Send to output stream
 			if reqStream {
-				g.streamEntity(Way{id, tags, nodes})
+				g.streamEntity(w)
 			}
 		}
 		return nil
@@ -375,15 +387,15 @@ func (g *Gosmonaut) scanRelations() error {
 				var e OSMEntity
 				switch types[i] {
 				case WayType:
-					if w, ok := g.wayCache[mid]; ok {
-						e = *w
+					if w, ok := g.wayCache.get(mid); ok {
+						e = w
 					} else {
 						g.printWarning(fmt.Sprintf("Way #%d in not in file for relation #%d", mid, id))
 						continue
 					}
 				case NodeType:
-					if n, ok := g.nodeCache[mid]; ok {
-						e = *n
+					if n, ok := g.nodeCache.get(mid); ok {
+						e = n
 					} else {
 						g.printWarning(fmt.Sprintf("Node #%d in not in file for relation #%d", mid, id))
 						continue
