@@ -18,6 +18,7 @@ const (
 
 // OSMEntity is the common interface of all OSM entities
 type OSMEntity interface {
+	GetID() int64
 	GetType() OSMType
 	GetTags() OSMTags
 	fmt.Stringer
@@ -27,10 +28,14 @@ type OSMEntity interface {
 
 // Node represents an OSM node element
 type Node struct {
-	ID   int64
-	Lat  float64
-	Lon  float64
-	Tags OSMTags
+	ID       int64
+	Lat, Lon float64
+	Tags     OSMTags
+}
+
+// GetID returns the ID
+func (n Node) GetID() int64 {
+	return n.ID
 }
 
 // GetType always returns NodeType
@@ -67,6 +72,11 @@ type Way struct {
 	Nodes []Node
 }
 
+// GetID returns the ID
+func (w Way) GetID() int64 {
+	return w.ID
+}
+
 // GetType always returns WayType
 func (w Way) GetType() OSMType {
 	return WayType
@@ -98,6 +108,11 @@ type Relation struct {
 	ID      int64
 	Tags    OSMTags
 	Members []Member
+}
+
+// GetID returns the ID
+func (r Relation) GetID() int64 {
+	return r.ID
 }
 
 // GetType always returns RelationType
