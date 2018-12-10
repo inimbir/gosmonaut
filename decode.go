@@ -16,18 +16,19 @@ import (
 // DecoderType represents the decoder that is used for parsing PBF blob data.
 type DecoderType int
 
+// Order is important: First decoder is the default
 const (
-	// GoDecoder uses the official Golang Protobuf package. All protobuf
-	// messages will be unmarshalled to temporary objects before processing.
-	GoDecoder DecoderType = iota
-
 	// FastDecoder is a custom implementation of the protobuf format. It is
 	// optimized for decoding of PBF files. Rather than unmarshalling it streams
 	// the entities and thus reduces GC overhead. The fast blob decoder lacks
 	// support of some protobuf features which include groups and unpacked
 	// varint arrays. It is supposed to fail when it encounteres a feature it
 	// doesn't support.
-	FastDecoder
+	FastDecoder DecoderType = iota
+
+	// GoDecoder uses the official Golang Protobuf package. All protobuf
+	// messages will be unmarshalled to temporary objects before processing.
+	GoDecoder
 )
 
 const (
@@ -130,14 +131,11 @@ type decoder struct {
 }
 
 // newDecoder returns a new decoder that reads from r.
-func newDecoder(f io.ReadSeeker, n int, decoderType DecoderType) *decoder {
-	if n < 1 {
-		n = 1
-	}
+func newDecoder(f io.ReadSeeker, nProcs int, decoderType DecoderType) *decoder {
 	buf := bytes.NewBuffer(make([]byte, 0, initialBlobBufSize))
 
 	return &decoder{
-		nProcs:          n,
+		nProcs:          nProcs,
 		finder:          &blobFinder{f, buf},
 		nodeIndexer:     newBlobIndexer(f, buf),
 		wayIndexer:      newBlobIndexer(f, buf),

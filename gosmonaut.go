@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -14,11 +15,27 @@ type osmPair struct {
 	e error
 }
 
+// Config defines the configuration for Gosmonaut.
+type Config struct {
+	// DebugMode prints warnings during decoding.
+	// Also duration and memory info will be printed after every processing step
+	// and the garbage collector is run.
+	DebugMode bool
+
+	// Set the number of processes that are used for decoding.
+	// If not set the amount of available logical CPUs will be used.
+	NumProcessors int
+
+	// Decoder sets the PBF blob decoder. Defaults to `FastDecoder`.
+	Decoder DecoderType
+}
+
 // Gosmonaut is responsible for decoding an OpenStreetMap pbf file.
 // For creating an instance the NewGosmonaut() function must be used.
 type Gosmonaut struct {
 	dec    *decoder
 	stream chan osmPair
+	lock   sync.Mutex
 
 	// Defined by caller
 	file             io.ReadSeeker
@@ -33,67 +50,74 @@ type Gosmonaut struct {
 	wayCache  *binaryWayEntityMap
 
 	// For debug mode
+	debugMode   bool
 	timeStarted time.Time
 	timeLast    time.Time
-
-	// DebugMode prints warnings during decoding.
-	// Also duration and memory info will be printed after every processing step
-	// and the garbage collector is run. This variable should not be changed
-	// after running Start().
-	DebugMode bool
-
-	// Set the number of processes that are used for decoding.
-	// If not set the amount of available logical CPUs will be used.
-	NumProcessors int
-
-	// Decoder sets the PBF blob decoder.
-	Decoder DecoderType
 }
 
-// NewGosmonaut creates a new Gosmonaut instance.
+// NewGosmonaut creates a new Gosmonaut instance. Either zero or exactly one
+// `Config` object must be passed.
+func NewGosmonaut(file io.ReadSeeker, config ...Config) (*Gosmonaut, error) {
+	// Check config
+	var conf Config
+	if len(config) > 1 {
+		return nil, errors.New("Only 1 Config object is allowed")
+	} else if len(config) == 1 {
+		conf = config[0]
+	}
+
+	// Get number of processes
+	var nProcs int
+	if conf.NumProcessors < 1 {
+		nProcs = runtime.NumCPU()
+	} else {
+		nProcs = conf.NumProcessors
+	}
+
+	// Create decoder
+	dec := newDecoder(file, nProcs, conf.Decoder)
+
+	return &Gosmonaut{
+		file:      file,
+		dec:       dec,
+		debugMode: conf.DebugMode,
+	}, nil
+}
+
+// Start starts the decoding process. The function call will block until the
+// previous run has finished.
 // Only types that are enabled in `types` will be sent to the caller.
 // funcEntityNeeded will be called to determine if the caller needs a specific
 // OSM entity.
-func NewGosmonaut(
-	file io.ReadSeeker,
+// Found entities and encountered errors can be received by polling the Next()
+// method.
+func (g *Gosmonaut) Start(
 	types OSMTypeSet,
 	funcEntityNeeded func(OSMType, OSMTags) bool,
-) *Gosmonaut {
-	return &Gosmonaut{
-		stream:           make(chan osmPair, entitiesPerPrimitiveBlock),
-		file:             file,
-		types:            types,
-		funcEntityNeeded: funcEntityNeeded,
-		nodeIDTracker:    newBitsetIDTracker(),
-		wayIDTracker:     newBitsetIDTracker(),
-		Decoder:          FastDecoder,
-	}
-}
+) {
+	// Block until previous run finished
+	g.lock.Lock()
+	g.stream = make(chan osmPair, entitiesPerPrimitiveBlock)
 
-// Start starts the decoding process (non-blocking).
-// Found entities and encountered errors can be received by polling the Next()
-// function.
-func (g *Gosmonaut) Start() {
 	go func() {
+		// Defer order is important
+		defer g.lock.Unlock()
+		defer close(g.stream)
+
+		// Init vars
+		g.funcEntityNeeded = funcEntityNeeded
+		g.types = types
+
+		g.nodeIDTracker = newBitsetIDTracker()
+		g.wayIDTracker = newBitsetIDTracker()
+
+		// Init debug vars
 		{
 			timeNow := time.Now()
 			g.timeStarted = timeNow
 			g.timeLast = timeNow
 		}
 		g.printDebugInfo("Decoding started")
-
-		defer close(g.stream)
-
-		// Determine number of processes
-		var nProcs int
-		if g.NumProcessors != 0 {
-			nProcs = g.NumProcessors
-		} else {
-			nProcs = runtime.NumCPU()
-		}
-
-		// Create decoder
-		g.dec = newDecoder(g.file, nProcs, g.Decoder)
 
 		// Scan relation dependencies
 		if g.types.Get(RelationType) {
@@ -158,7 +182,11 @@ func (g *Gosmonaut) Start() {
 			g.printDebugInfo("Scanned relations")
 		}
 
-		if g.DebugMode {
+		g.wayCache = nil
+		g.nodeCache = nil
+		g.printDebugInfo("Deleted entity caches")
+
+		if g.debugMode {
 			fmt.Println("Elapsed time:", time.Since(g.timeStarted))
 		}
 	}()
@@ -440,13 +468,13 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 
 /* Debug Mode */
 func (g *Gosmonaut) printWarning(warning string) {
-	if g.DebugMode {
+	if g.debugMode {
 		fmt.Println("Warning:", warning)
 	}
 }
 
 func (g *Gosmonaut) printDebugInfo(state string) {
-	if !g.DebugMode {
+	if !g.debugMode {
 		return
 	}
 	elapsed := time.Since(g.timeLast).Seconds()

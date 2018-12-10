@@ -109,85 +109,90 @@ func testGosmonaut(
 	}
 	defer file.Close()
 
-	g := NewGosmonaut(file, types, f)
-	g.Decoder = decoder
-	g.Start()
-	var nh, wh, rh bool
-	var rnc, rwc, rrc int
-	highestType := NodeType
-	for {
-		if i, err := g.Next(); err == io.EOF {
-			break
-		} else if err != nil {
-			t.Fatal(err)
-		} else {
-			// Check type order (nodes, then ways, then relations)
-			if i.GetType() < highestType {
-				t.Fatal("Type order is wrong")
-			}
-			highestType = i.GetType()
+	g, _ := NewGosmonaut(file, Config{
+		Decoder: decoder,
+	})
 
-			switch i := i.(type) {
-			case Node:
-				// Check first entity
-				if !nh {
-					if i.String() != ns {
-						t.Fatal("Node test failed")
-					}
-					nh = true
+	// Run test twice in order to test repeated runs
+	for i := 0; i < 2; i++ {
+		g.Start(types, f)
+		var nh, wh, rh bool
+		var rnc, rwc, rrc int
+		highestType := NodeType
+		for {
+			if e, err := g.Next(); err == io.EOF {
+				break
+			} else if err != nil {
+				t.Fatal(err)
+			} else {
+				// Check type order (nodes, then ways, then relations)
+				if e.GetType() < highestType {
+					t.Fatal("Type order is wrong")
 				}
+				highestType = e.GetType()
 
-				// Count entities
-				rnc++
-			case Way:
-				// Check first entity
-				if !wh {
-					if i.String() != ws {
-						t.Fatal("Way test failed")
+				switch e := e.(type) {
+				case Node:
+					// Check first entity
+					if !nh {
+						if e.String() != ns {
+							t.Fatal("Node test failed")
+						}
+						nh = true
 					}
-					wh = true
-				}
 
-				// Count entities
-				rwc++
-				rnc += len(i.Nodes)
-			case Relation:
-				// Check first entity
-				if !rh {
-					if i.String() != rs {
-						t.Fatal("Relation test failed")
+					// Count entities
+					rnc++
+				case Way:
+					// Check first entity
+					if !wh {
+						if e.String() != ws {
+							t.Fatal("Way test failed")
+						}
+						wh = true
 					}
-					rh = true
-				}
 
-				// Count entities
-				rrc++
-				for _, m := range i.Members {
-					switch mi := m.Entity.(type) {
-					case Node:
-						rnc++
-					case Way:
-						rwc++
-						rnc += len(mi.Nodes)
-					default:
-						t.Fatalf("Invalid member entity type: %T", mi)
+					// Count entities
+					rwc++
+					rnc += len(e.Nodes)
+				case Relation:
+					// Check first entity
+					if !rh {
+						if e.String() != rs {
+							t.Fatal("Relation test failed")
+						}
+						rh = true
 					}
+
+					// Count entities
+					rrc++
+					for _, m := range e.Members {
+						switch mi := m.Entity.(type) {
+						case Node:
+							rnc++
+						case Way:
+							rwc++
+							rnc += len(mi.Nodes)
+						default:
+							t.Fatalf("Invalid member entity type: %T", mi)
+						}
+					}
+				default:
+					t.Fatalf("Invalid entity type: %T", i)
 				}
-			default:
-				t.Fatalf("Invalid entity type: %T", i)
 			}
 		}
-	}
 
-	// Check type counts
-	if rnc != nc {
-		t.Fatalf("Wrong number of nodes")
-	}
-	if rwc != wc {
-		t.Fatalf("Wrong number of ways")
-	}
-	if rrc != rc {
-		t.Fatalf("Wrong number of relations")
+		// Check type counts
+		if rnc != nc {
+			t.Fatalf("Wrong number of nodes")
+		}
+		if rwc != wc {
+			t.Fatalf("Wrong number of ways")
+		}
+		if rrc != rc {
+			t.Fatalf("Wrong number of relations")
+		}
 	}
 }
 
