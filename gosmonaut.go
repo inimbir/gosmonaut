@@ -17,10 +17,13 @@ type osmPair struct {
 
 // Config defines the configuration for Gosmonaut.
 type Config struct {
-	// DebugMode prints warnings during decoding.
-	// Also duration and memory info will be printed after every processing step
-	// and the garbage collector is run.
+	// DebugMode prints duration and memory info and runs the garbage collector
+	// after every processing step if enabled.
 	DebugMode bool
+
+	// PrintWarnings prints warnings to stdout if enabled. Possible warnings
+	// include missing referenced entites or unsupported features.
+	PrintWarnings bool
 
 	// Set the number of processes that are used for decoding.
 	// If not set the amount of available logical CPUs will be used.
@@ -50,9 +53,10 @@ type Gosmonaut struct {
 	wayCache  *binaryWayEntityMap
 
 	// For debug mode
-	debugMode   bool
-	timeStarted time.Time
-	timeLast    time.Time
+	debugMode     bool
+	printWarnings bool
+	timeStarted   time.Time
+	timeLast      time.Time
 }
 
 // NewGosmonaut creates a new Gosmonaut instance. Either zero or exactly one
@@ -78,9 +82,10 @@ func NewGosmonaut(file io.ReadSeeker, config ...Config) (*Gosmonaut, error) {
 	dec := newDecoder(file, nProcs, conf.Decoder)
 
 	return &Gosmonaut{
-		file:      file,
-		dec:       dec,
-		debugMode: conf.DebugMode,
+		file:          file,
+		dec:           dec,
+		debugMode:     conf.DebugMode,
+		printWarnings: conf.PrintWarnings,
 	}, nil
 }
 
@@ -468,7 +473,7 @@ func (g *Gosmonaut) scan(t OSMType, receiver func(v interface{}) error) error {
 
 /* Debug Mode */
 func (g *Gosmonaut) printWarning(warning string) {
-	if g.debugMode {
+	if g.printWarnings {
 		fmt.Println("Warning:", warning)
 	}
 }
