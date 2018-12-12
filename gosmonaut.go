@@ -40,8 +40,10 @@ type Gosmonaut struct {
 	stream chan osmPair
 	lock   sync.Mutex
 
+	// Store header block
+	header Header
+
 	// Defined by caller
-	file             io.ReadSeeker
 	types            OSMTypeSet
 	funcEntityNeeded func(OSMType, OSMTags) bool
 
@@ -59,8 +61,9 @@ type Gosmonaut struct {
 	timeLast      time.Time
 }
 
-// NewGosmonaut creates a new Gosmonaut instance. Either zero or exactly one
-// `Config` object must be passed.
+// NewGosmonaut creates a new Gosmonaut instance and parses the meta information
+// (Header) of the given file. Either zero or exactly one `Config` object must
+// be passed.
 func NewGosmonaut(file io.ReadSeeker, config ...Config) (*Gosmonaut, error) {
 	// Check config
 	var conf Config
@@ -79,14 +82,22 @@ func NewGosmonaut(file io.ReadSeeker, config ...Config) (*Gosmonaut, error) {
 	}
 
 	// Create decoder
-	dec := newDecoder(file, nProcs, conf.Decoder)
+	dec, header, err := newDecoder(file, nProcs, conf.Decoder)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Gosmonaut{
-		file:          file,
 		dec:           dec,
+		header:        header,
 		debugMode:     conf.DebugMode,
 		printWarnings: conf.PrintWarnings,
 	}, nil
+}
+
+// Header returns the meta information of the PBF file.
+func (g *Gosmonaut) Header() Header {
+	return g.header
 }
 
 // Start starts the decoding process. The function call will block until the

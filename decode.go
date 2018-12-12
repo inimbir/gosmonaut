@@ -50,13 +50,7 @@ var (
 	}
 )
 
-type BoundingBox struct {
-	Left   float64
-	Right  float64
-	Top    float64
-	Bottom float64
-}
-
+// Header contains the meta information of the PBF file.
 type Header struct {
 	BoundingBox                      *BoundingBox
 	RequiredFeatures                 []string
@@ -66,6 +60,14 @@ type Header struct {
 	OsmosisReplicationTimestamp      time.Time
 	OsmosisReplicationSequenceNumber int64
 	OsmosisReplicationBaseURL        string
+}
+
+// BoundingBox defines a rectangular area of coordinates.
+type BoundingBox struct {
+	Left   float64
+	Right  float64
+	Top    float64
+	Bottom float64
 }
 
 /* Used for decoding channels */
@@ -117,9 +119,6 @@ type decoder struct {
 	wg          sync.WaitGroup
 	decoderType DecoderType
 
-	// Store header block
-	header *Header
-
 	// Blob providers
 	nodeIndexer, wayIndexer, relationIndexer *blobIndexer
 	finder                                   *blobFinder
@@ -130,11 +129,11 @@ type decoder struct {
 	outputIndex int
 }
 
-// newDecoder returns a new decoder that reads from r.
-func newDecoder(f io.ReadSeeker, nProcs int, decoderType DecoderType) *decoder {
+// newDecoder returns a new decoder that reads from f.
+func newDecoder(f io.ReadSeeker, nProcs int, decoderType DecoderType) (dec *decoder, header Header, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, initialBlobBufSize))
 
-	return &decoder{
+	dec = &decoder{
 		nProcs:          nProcs,
 		finder:          &blobFinder{f, buf},
 		nodeIndexer:     newBlobIndexer(f, buf),
@@ -142,6 +141,14 @@ func newDecoder(f io.ReadSeeker, nProcs int, decoderType DecoderType) *decoder {
 		relationIndexer: newBlobIndexer(f, buf),
 		decoderType:     decoderType,
 	}
+
+	blob, err := dec.finder.readHeaderBlob()
+	if err != nil {
+		return
+	}
+
+	header, err = decodeOSMHeader(blob)
+	return
 }
 
 // Start decoding process using n goroutines.
@@ -151,20 +158,6 @@ func (dec *decoder) Start(t OSMType) error {
 
 	dec.nRun++
 	dec.outputIndex = 0
-
-	// Read OSM header
-	if dec.nRun == 1 {
-		blob, err := dec.finder.readHeaderBlob()
-		if err != nil {
-			return err
-		}
-
-		if header, err := decodeOSMHeader(blob); err == nil {
-			dec.header = header
-		} else {
-			return err
-		}
-	}
 
 	// Start data decoders
 	dec.inputs = make([]chan<- decodeInput, 0, dec.nProcs)
@@ -281,27 +274,28 @@ func (dec *decoder) nextPair() ([]entityParser, error) {
 	return o.parsers, o.err
 }
 
-func decodeOSMHeader(blob *OSMPBF.Blob) (*Header, error) {
+func decodeOSMHeader(blob *OSMPBF.Blob) (header Header, err error) {
 	data, err := getBlobData(blob)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	headerBlock := new(OSMPBF.HeaderBlock)
-	if err := proto.Unmarshal(data, headerBlock); err != nil {
-		return nil, err
+	if err = proto.Unmarshal(data, headerBlock); err != nil {
+		return
 	}
 
 	// Check we have the parse capabilities
 	requiredFeatures := headerBlock.GetRequiredFeatures()
 	for _, feature := range requiredFeatures {
 		if !parseCapabilities[feature] {
-			return nil, fmt.Errorf("parser does not have %s capability", feature)
+			err = fmt.Errorf("parser does not have %s capability", feature)
+			return
 		}
 	}
 
 	// Read properties to header struct
-	header := &Header{
+	header = Header{
 		RequiredFeatures:                 headerBlock.GetRequiredFeatures(),
 		OptionalFeatures:                 headerBlock.GetOptionalFeatures(),
 		WritingProgram:                   headerBlock.GetWritingprogram(),
@@ -324,7 +318,7 @@ func decodeOSMHeader(blob *OSMPBF.Blob) (*Header, error) {
 			Top:    1e-9 * float64(*headerBlock.Bbox.Top),
 		}
 	}
-	return header, nil
+	return
 }
 
 /* Blob Provider */

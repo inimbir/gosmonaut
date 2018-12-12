@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 )
 
 const (
@@ -193,6 +195,45 @@ func testGosmonaut(
 		if rrc != rc {
 			t.Fatalf("Wrong number of relations")
 		}
+	}
+}
+
+func TestHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping decoding tests in short mode")
+	}
+
+	downloadTestOSMFile(London, t)
+
+	header := Header{
+		BoundingBox: &BoundingBox{
+			-0.511482,
+			0.33543700000000004,
+			51.69344,
+			51.285540000000005,
+		},
+		RequiredFeatures: []string{
+			"OsmSchema-V0.6",
+			"DenseNodes",
+		},
+		WritingProgram:              "Osmium (http://wiki.openstreetmap.org/wiki/Osmium)",
+		OsmosisReplicationTimestamp: time.Unix(1395698102, 0),
+	}
+
+	// Open file
+	file, err := os.Open(filepath.Join("testdata", London))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	// Compare headers
+	g, err := NewGosmonaut(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(header, g.Header()) {
+		t.Fatal("Header test failed")
 	}
 }
 
