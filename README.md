@@ -1,10 +1,52 @@
-# osmpbf
-[![Build Status](https://travis-ci.org/qedus/osmpbf.svg?branch=master)](https://travis-ci.org/qedus/osmpbf)
-[![Coverage Status](https://coveralls.io/repos/github/qedus/osmpbf/badge.svg?branch=master)](https://coveralls.io/github/qedus/osmpbf?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/qedus/osmpbf)](https://goreportcard.com/report/github.com/qedus/osmpbf)
-[![GoDoc](https://godoc.org/github.com/qedus/osmpbf?status.svg)](https://godoc.org/github.com/qedus/osmpbf)
+# gOSMonaut
 
-Package osmpbf is used to decode OpenStreetMap pbf files.
+gOSMonaut is a Go library that decodes OpenStreetMap PBF files. Instead of returning the internal PBF data model, which uses reference-IDs to nested OSM entities, it always returns complete entities. E.g. a way contains all child nodes, including tags and coordinates, instead of just the node-IDs.
+
+## Output
+
+All entities can be serialized into the JSON format. The used JSON format is similar to [Overpass JSON](http://overpass-api.de/output_formats.html#json) but it comes with nested entities. Here is an example of how a relation with nested member ways and nodes can look like:
+
+```json
+{
+  "type": "relation",
+  "id": 8024698,
+  "tags": {
+    "addr:city": "Leonberg",
+    "addr:housenumber": "5",
+    "addr:postcode": "71229",
+    "addr:street": "Sellallee",
+    "building": "apartments",
+    "type": "multipolygon"
+  },
+  "members": [
+    {
+      "role": "outer",
+      "entity": {
+        "type": "way",
+        "id": 561602115,
+        "tags": {},
+        "nodes": [
+          {
+            "type": "node",
+            "id": 5414987608,
+            "lat": 48.7994117,
+            "lon": 9.0173691
+          },
+          {
+            "type": "node",
+            "id": 5414987609,
+            "lat": 48.7994205,
+            "lon": 9.0171999,
+            "tags": {
+              "entrance": "main"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+```
 
 ## Installation
 
