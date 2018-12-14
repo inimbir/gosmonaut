@@ -56,7 +56,7 @@ func (m *binaryNodeEntityMap) add(e Node) {
 	m.buckets[h] = append(m.buckets[h], e)
 }
 
-// Must be called between the last write and the first read.
+// Must be called between the last write and the first read
 func (m *binaryNodeEntityMap) prepare() {
 	// Sort buckets
 	for _, b := range m.buckets {
@@ -136,7 +136,7 @@ func (m *binaryWayEntityMap) add(e Way) {
 	m.buckets[h] = append(m.buckets[h], e)
 }
 
-// Must be called between the last write and the first read.
+// Must be called between the last write and the first read
 func (m *binaryWayEntityMap) prepare() {
 	// Sort buckets
 	for _, b := range m.buckets {

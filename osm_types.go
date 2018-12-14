@@ -6,17 +6,17 @@ import (
 	"fmt"
 )
 
-// OSMType represents the type of an OSM entity
+// OSMType represents the type of an OSM entity.
 type OSMType uint8
 
-// OSM Types: node, way, relation
+// OSM Types: node, way, relation.
 const (
 	NodeType OSMType = 1 << iota
 	WayType
 	RelationType
 )
 
-// OSMEntity is the common interface of all OSM entities
+// OSMEntity is the common interface of all OSM entities.
 type OSMEntity interface {
 	GetID() int64
 	GetType() OSMType
@@ -26,24 +26,24 @@ type OSMEntity interface {
 
 /* Node */
 
-// Node represents an OSM node element
+// Node represents an OSM node element.
 type Node struct {
 	ID       int64
 	Lat, Lon float64
 	Tags     OSMTags
 }
 
-// GetID returns the ID
+// GetID returns the ID.
 func (n Node) GetID() int64 {
 	return n.ID
 }
 
-// GetType always returns NodeType
+// GetType always returns NodeType.
 func (n Node) GetType() OSMType {
 	return NodeType
 }
 
-// GetTags returns the tags
+// GetTags returns the tags.
 func (n Node) GetTags() OSMTags {
 	return n.Tags
 }
@@ -52,7 +52,7 @@ func (n Node) String() string {
 	return prettyPrintEntity(n)
 }
 
-// MarshalJSON prints the JSON representation of the node
+// MarshalJSON prints the JSON representation of the node.
 func (n Node) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string     `json:"type"`
@@ -65,24 +65,24 @@ func (n Node) MarshalJSON() ([]byte, error) {
 
 /* Way */
 
-// Way represents an OSM way element
+// Way represents an OSM way element.
 type Way struct {
 	ID    int64
 	Tags  OSMTags
 	Nodes []Node
 }
 
-// GetID returns the ID
+// GetID returns the ID.
 func (w Way) GetID() int64 {
 	return w.ID
 }
 
-// GetType always returns WayType
+// GetType always returns WayType.
 func (w Way) GetType() OSMType {
 	return WayType
 }
 
-// GetTags returns the tags
+// GetTags returns the tags.
 func (w Way) GetTags() OSMTags {
 	return w.Tags
 }
@@ -91,7 +91,7 @@ func (w Way) String() string {
 	return prettyPrintEntity(w)
 }
 
-// MarshalJSON prints the JSON representation of the way
+// MarshalJSON prints the JSON representation of the way.
 func (w Way) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type  string  `json:"type"`
@@ -103,24 +103,24 @@ func (w Way) MarshalJSON() ([]byte, error) {
 
 /* Relation */
 
-// Relation represents an OSM relation element
+// Relation represents an OSM relation element.
 type Relation struct {
 	ID      int64
 	Tags    OSMTags
 	Members []Member
 }
 
-// GetID returns the ID
+// GetID returns the ID.
 func (r Relation) GetID() int64 {
 	return r.ID
 }
 
-// GetType always returns RelationType
+// GetType always returns RelationType.
 func (r Relation) GetType() OSMType {
 	return RelationType
 }
 
-// GetTags returns the tags
+// GetTags returns the tags.
 func (r Relation) GetTags() OSMTags {
 	return r.Tags
 }
@@ -129,7 +129,7 @@ func (r Relation) String() string {
 	return prettyPrintEntity(r)
 }
 
-// MarshalJSON prints the JSON representation of the relation
+// MarshalJSON prints the JSON representation of the relation.
 func (r Relation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type    string   `json:"type"`
@@ -139,7 +139,7 @@ func (r Relation) MarshalJSON() ([]byte, error) {
 	}{"relation", r.ID, r.Tags, r.Members})
 }
 
-// Member represents a member of a relation
+// Member represents a member of a relation.
 type Member struct {
 	Role   string    `json:"role"`
 	Entity OSMEntity `json:"entity"`
@@ -147,10 +147,10 @@ type Member struct {
 
 /* OSMTypeSet */
 
-// OSMTypeSet is used to enable/disable OSM types
+// OSMTypeSet is used to enable/disable OSM types.
 type OSMTypeSet uint8
 
-// NewOSMTypeSet returns a new OSMTypeSet with the given types enabled/disabled
+// NewOSMTypeSet returns a new OSMTypeSet with the given types enabled/disabled.
 func NewOSMTypeSet(nodes, ways, relations bool) OSMTypeSet {
 	var s OSMTypeSet
 	s.Set(NodeType, nodes)
@@ -159,7 +159,7 @@ func NewOSMTypeSet(nodes, ways, relations bool) OSMTypeSet {
 	return s
 }
 
-// Set enables/disables the given type
+// Set enables/disables the given type.
 func (s *OSMTypeSet) Set(t OSMType, enabled bool) {
 	if enabled {
 		*s = OSMTypeSet(uint8(*s) | uint8(t))
@@ -168,7 +168,7 @@ func (s *OSMTypeSet) Set(t OSMType, enabled bool) {
 	}
 }
 
-// Get returns true if the given type is enabled
+// Get returns true if the given type is enabled.
 func (s *OSMTypeSet) Get(t OSMType) bool {
 	return uint8(*s)&uint8(t) != 0
 }

@@ -285,7 +285,7 @@ func (d *goRelationParser) types() ([]OSMType, error) {
 }
 
 /* Tag Decoding */
-// Make tags from stringtable and two parallel arrays of IDs.
+// Make tags from stringtable and two parallel arrays of IDs
 func extractTags(st stringTable, keyIDs, valueIDs []uint32) (OSMTags, error) {
 	if len(keyIDs) != len(valueIDs) {
 		return nil, errors.New("Length of tag key and value arrays differs")
@@ -308,7 +308,8 @@ type tagUnpacker struct {
 	index    int
 }
 
-// Make tags map from stringtable and array of IDs (used in DenseNodes encoding).
+// Make tags map from stringtable and array of IDs (used in DenseNodes
+// encoding).
 func (tu *tagUnpacker) next() (OSMTags, error) {
 	if len(tu.keysVals) == 0 {
 		return nil, nil

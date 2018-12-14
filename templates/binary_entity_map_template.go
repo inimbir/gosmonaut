@@ -52,7 +52,7 @@ func (m *binaryGenericEntityTypeEntityMap) add(e GenericEntityType) {
 	m.buckets[h] = append(m.buckets[h], e)
 }
 
-// Must be called between the last write and the first read.
+// Must be called between the last write and the first read
 func (m *binaryGenericEntityTypeEntityMap) prepare() {
 	// Sort buckets
 	for _, b := range m.buckets {

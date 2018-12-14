@@ -36,7 +36,7 @@ const (
 
 	initialBlobBufSize = 1 * 1024 * 1024
 
-	// maxBlobSize is maximum supported blob size.
+	// maxBlobSize is maximum supported blob size
 	maxBlobSize = 32 * 1024 * 1024
 
 	// Typical PrimitiveBlock contains 8k OSM entities
@@ -112,7 +112,7 @@ type relationParser interface {
 	types() ([]OSMType, error)
 }
 
-// A Decoder reads and decodes OpenStreetMap PBF data from an input stream.
+// A Decoder reads and decodes OpenStreetMap PBF data from an input stream
 type decoder struct {
 	nProcs      int
 	nRun        int
@@ -310,7 +310,8 @@ func decodeOSMHeader(blob *OSMPBF.Blob) (header Header, err error) {
 	}
 	// read bounding box if it exists
 	if headerBlock.Bbox != nil {
-		// Units are always in nanodegree and do not obey granularity rules. See osmformat.proto
+		// Units are always in nanodegree and do not obey granularity rules.
+		// See osmformat.proto.
 		header.BoundingBox = &BoundingBox{
 			Left:   1e-9 * float64(*headerBlock.Bbox.Left),
 			Right:  1e-9 * float64(*headerBlock.Bbox.Right),
