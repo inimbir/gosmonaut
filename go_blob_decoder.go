@@ -1,8 +1,8 @@
 package gosmonaut
 
 import (
-	"./OSMPBF"
 	"errors"
+	"github.com/MorbZ/gosmonaut/OSMPBF"
 	"github.com/golang/protobuf/proto"
 	"io"
 )

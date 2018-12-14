@@ -1,12 +1,12 @@
 package gosmonaut
 
 import (
-	"./OSMPBF"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/MorbZ/gosmonaut/OSMPBF"
 	"github.com/golang/protobuf/proto"
 	"io"
 	"sync"
