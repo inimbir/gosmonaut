@@ -1,6 +1,9 @@
 # gOSMonaut
 
 [![Build Status](https://travis-ci.org/MorbZ/gosmonaut.svg?branch=master)](https://travis-ci.org/MorbZ/gosmonaut)
+[![Coverage Status](https://coveralls.io/repos/github/MorbZ/gosmonaut/badge.svg?branch=master)](https://coveralls.io/github/MorbZ/gosmonaut?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/MorbZ/gosmonaut)](https://goreportcard.com/report/github.com/MorbZ/gosmonaut)
+[![GoDoc](https://godoc.org/github.com/MorbZ/gosmonaut?status.svg)](https://godoc.org/github.com/MorbZ/gosmonaut)
 
 gOSMonaut is a Go library that decodes OpenStreetMap PBF files. Instead of returning the internal PBF data model, which uses reference-IDs of nested OSM entities, it always returns complete entities. E.g. a way contains all child nodes, including tags and coordinates, instead of just the node-IDs.
 
