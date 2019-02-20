@@ -1,5 +1,7 @@
 # gOSMonaut
 
+[![Build Status](https://travis-ci.org/MorbZ/gosmonaut.svg?branch=master)](https://travis-ci.org/MorbZ/gosmonaut)
+
 gOSMonaut is a Go library that decodes OpenStreetMap PBF files. Instead of returning the internal PBF data model, which uses reference-IDs of nested OSM entities, it always returns complete entities. E.g. a way contains all child nodes, including tags and coordinates, instead of just the node-IDs.
 
 ## Installation
@@ -95,7 +97,7 @@ gosmonaut.NewGosmonaut(
 ```
 
 See the [documentation](https://godoc.org/github.com/MorbZ/gosmonaut#Config) for possible configuration parameters.
- 
+
 ## Output
 
 All entities can be serialized into the JSON format. The used JSON format is similar to [Overpass JSON](http://overpass-api.de/output_formats.html#json) but it comes with nested entities. Here is an example of how a relation with nested member ways and nodes can look like:
