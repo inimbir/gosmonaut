@@ -22,7 +22,7 @@ const (
 	// optimized for decoding of PBF files. Rather than unmarshalling it streams
 	// the entities and thus reduces GC overhead. The fast blob decoder lacks
 	// support of some protobuf features which include groups and unpacked
-	// varint arrays. It is supposed to fail when it encounteres a feature it
+	// varint arrays. It is supposed to fail when it encounters a feature it
 	// doesn't support.
 	FastDecoder DecoderType = iota
 
@@ -179,7 +179,7 @@ func (dec *decoder) Start(t OSMType) error {
 
 			for i := range input {
 				if i.err == nil {
-					// Decode objects and send to ouput
+					// Decode objects and send to output
 					parsers, types, err := bd.decode(i.blob, t)
 					output <- decodeOutput{
 						parsers: parsers,

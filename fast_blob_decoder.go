@@ -57,7 +57,7 @@ const (
 // optimized for decoding of PBF files. Rather than unmarshalling it streams
 // the entities and thus reduces GC overhead. The fast blob decoder lacks
 // support of some protobuf features which include groups and unpacked varint
-// arrays. It is supposed to fail when it encounteres a feature it doesn't
+// arrays. It is supposed to fail when it encounters a feature it doesn't
 // support.
 type fastBlobDecoder struct {
 	q                                 []entityParser
