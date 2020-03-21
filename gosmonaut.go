@@ -31,6 +31,10 @@ type Config struct {
 
 	// Decoder sets the PBF blob decoder. Defaults to `FastDecoder`.
 	Decoder DecoderType
+
+	// Set an option to skip nodes in case they are missed in OSM file.
+	// Defaults to false.
+	SkipMissingNodes bool
 }
 
 // Gosmonaut is responsible for decoding an OpenStreetMap pbf file.
@@ -59,6 +63,9 @@ type Gosmonaut struct {
 	printWarnings bool
 	timeStarted   time.Time
 	timeLast      time.Time
+
+	// Skip missing nodes while parsing ways
+	skipMissingNodes bool
 }
 
 // NewGosmonaut creates a new Gosmonaut instance and parses the meta information
@@ -88,10 +95,11 @@ func NewGosmonaut(file io.ReadSeeker, config ...Config) (*Gosmonaut, error) {
 	}
 
 	return &Gosmonaut{
-		dec:           dec,
-		header:        header,
-		debugMode:     conf.DebugMode,
-		printWarnings: conf.PrintWarnings,
+		dec:              dec,
+		header:           header,
+		debugMode:        conf.DebugMode,
+		printWarnings:    conf.PrintWarnings,
+		skipMissingNodes: conf.SkipMissingNodes,
 	}, nil
 }
 
@@ -371,6 +379,10 @@ func (g *Gosmonaut) scanWays() error {
 				if n, ok := g.nodeCache.get(rid); ok {
 					nodes[i] = n
 				} else {
+					if g.skipMissingNodes {
+						g.printWarning(fmt.Sprintf("Node #%d in not in file for way #%d", rid, id))
+						continue
+					}
 					return fmt.Errorf("Node #%d in not in file for way #%d", rid, id)
 				}
 			}
